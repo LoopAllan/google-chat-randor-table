@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>Store screenshot</title>
+  <link rel="stylesheet" href="../styles/mdtable.css">
+  <style>
+    body { margin: 0; width: 1280px; height: 800px; background: #1f1f1f; color: #e3e3e3; font: 15px/1.5 system-ui, sans-serif; display: flex; gap: 40px; padding: 48px 56px; box-sizing: border-box; }
+    .col { flex: 1; min-width: 0; }
+    h2 { font-size: 20px; margin: 0 0 16px; color: #fff; }
+    .bubble { background: #303134; border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; }
+    .raw { white-space: pre-wrap; font: inherit; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="col">
+    <h2>Before — raw markdown</h2>
+    <!-- contenteditable keeps the extension from rendering this "before" sample. -->
+    <div class="bubble" contenteditable="true"><pre class="raw">這三個數字都是進到職務詳細頁時，系統即時去查的。
+| 欄位 | 意義 | 資料來源 |
+| --- | --- | --- |
+| 被瀏覽數 | 最近 60 天被點開的次數 | 職務瀏覽統計 |
+| 14 天內來訪 | 最近 14 天來看過的人數 | 人才來訪紀錄 |
+| 60 天內應徵 | 最近 60 天的應徵數 | 應徵資料 |
+幾個容易誤解的地方：
+• 被瀏覽數是「次數」，來訪是「人數」。</pre></div>
+  </div>
+  <div class="col">
+    <h2>After — rendered table</h2>
+    <div class="bubble"><div>這三個數字都是進到職務詳細頁時，系統即時去查的。<br>| 欄位 | 意義 | 資料來源 |<br>| --- | --- | --- |<br>| 被瀏覽數 | 最近 60 天被點開的次數 | 職務瀏覽統計 |<br>| 14 天內來訪 | 最近 14 天來看過的人數 | 人才來訪紀錄 |<br>| 60 天內應徵 | 最近 60 天的應徵數 | 應徵資料 |<br>幾個容易誤解的地方：<ul><li>被瀏覽數是「次數」，來訪是「人數」。</li></ul></div></div>
+    <div class="bubble"><pre style="margin:0">| service | 2xx | 4xx | 5xx |
+|:--|--:|--:|--:|
+| api-a | 12,034 | 52 | 0 |
+| api-b | 8,771 | 340 | 12 |</pre></div>
+  </div>
+
+  <script src="../src/tableParser.js"></script>
+  <script src="../src/textExtractor.js"></script>
+  <script src="../src/tableRenderer.js"></script>
+  <script src="../src/messageEnhancer.js"></script>
+  <script src="../src/tableWatcher.js"></script>
+  <script src="../src/contentScript.js"></script>
+</body>
+</html>

@@ -45,6 +45,14 @@ npm test            # node:test + jsdom
 open demo/index.html  # 模擬 Chat 泡泡的本機 demo
 ```
 
+## 發布到 Chrome Web Store
+
+```bash
+npm run package   # 產生 dist/google-chat-markdown-table.zip
+```
+
+送審要填的內容與素材整理在 `store/listing.md`，隱私權政策在 `PRIVACY.md`。改版時記得先調高 `manifest.json` 的 `version`。
+
 ## 已知限制
 
 - `mail.google.com` 整個網域都會掃描，所以 Gmail 純文字信件裡的 markdown table 也會被渲染。
