@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>md-table demo</title>
+  <link rel="stylesheet" href="../styles/mdtable.css">
+  <style>
+    body { font: 14px system-ui, sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
+    .bubble { background: #f1f3f4; border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
+    .bubble.dark { background: #303134; color: #e8eaed; }
+  </style>
+</head>
+<body>
+  <!-- Mimics a rich Chat message: prose, table lines, then bold heading, nested list, link, inline code. -->
+  <div class="bubble dark"><div id="rich">這三個數字都是進到職務詳細頁時,系統即時去查的。<br>| 欄位 | 意義 | 資料來源 |<br>| --- | --- | --- |<br>| 被瀏覽數 | 最近 60 天被點開的次數 | 職務的瀏覽統計資料 |<br>| 14 天內來訪 | 最近 14 天來看過的人數 | 人才來訪紀錄庫 |<br><b>幾個容易誤解的地方:</b><ul><li>被瀏覽數是「次數」,來訪是「人數」。</li><li>以下情況會顯示「-」:<ul><li>職缺已關閉。</li><li>帳號沒有「搜尋人才」權限。</li></ul></li></ul><b>技術參考</b><ul><li>後端 API:<code>JobController::actionAjaxJobApplyClickInfo()</code></li><li>文件:<a href="#">連結</a></li></ul></div></div>
+
+  <!-- Mimics a Chat bubble: plain text with <br> line breaks, inline formatting already applied. -->
+  <div class="bubble"><span id="plain">本週數據：<br>| 服務 | 錯誤數 | 狀態 |<br>| :-- | --: | :-: |<br>| api-a | 12 | <b>OK</b> |<br>| api-b | 340 | 異常 |<br>以上</span></div>
+
+  <!-- Mimics a Chat code block. -->
+  <div class="bubble dark"><span>貼在 code block 裡：</span><pre id="code">| key | value |
+|-----|-------|
+| a   | 1     |
+| b   | 2     |</pre></div>
+
+  <div class="bubble" id="no-table"><span>這不是表格 a | b</span></div>
+
+  <div contenteditable="true" class="bubble" id="composer">| 輸入框 |<br>| --- |<br>| 不應渲染 |</div>
+
+  <!-- Wide table in a narrow bubble: should scroll horizontally instead of squeezing columns. -->
+  <div class="bubble dark" style="max-width: 360px"><span id="wide">| 欄位 | 意義 | 資料來源 | 備註 |<br>| --- | --- | --- | --- |<br>| 被瀏覽數(圖中90) | 這個職缺最近 60 天被求職者點開的次數 | 職務的瀏覽統計資料。系統會暫存結果,最長約 1 小時才更新一次,所以數字不是即時的。 | Redis 快取 3600 秒 |</span></div>
+
+  <div id="list"></div>
+
+  <script src="../src/tableParser.js"></script>
+  <script src="../src/textExtractor.js"></script>
+  <script src="../src/tableRenderer.js"></script>
+  <script src="../src/messageEnhancer.js"></script>
+  <script src="../src/tableWatcher.js"></script>
+  <script src="../src/contentScript.js"></script>
+  <script>
+    // Simulates a message arriving after load.
+    setTimeout(() => {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = '<span id="late">| 後到的訊息 |<br>|---|<br>| 也會渲染 |</span>';
+      document.getElementById('list').appendChild(bubble);
+    }, 100);
+  </script>
+</body>
+</html>

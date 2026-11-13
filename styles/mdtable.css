@@ -1,0 +1,65 @@
+/* The markdown lines stay in the DOM (Chat owns them) but are hidden while the table is shown. */
+[data-mdtable-hidden="table"] {
+  display: none !important;
+}
+
+.mdtable-wrapper {
+  margin: 4px 0;
+  max-width: 100%;
+}
+
+.mdtable-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 4px 0;
+  /* A horizontal trackpad swipe should scroll the table, not trigger browser back/forward. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, currentColor 35%, transparent) transparent;
+}
+
+/*
+ * max-content stops the bubble from squeezing columns into one-word-per-line;
+ * the per-cell cap below keeps long cells readable. Wider than the bubble -> scroll.
+ * currentColor keeps the table readable in both Chat light and dark themes.
+ */
+table.mdtable {
+  width: max-content;
+  border-collapse: collapse;
+  font-size: inherit;
+  color: inherit;
+}
+
+table.mdtable th,
+table.mdtable td {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  max-width: 20em;
+  padding: 4px 10px;
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+table.mdtable thead th {
+  font-weight: 600;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+table.mdtable tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.mdtable-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.mdtable-toggle:hover {
+  opacity: 1;
+  text-decoration: underline;
+}

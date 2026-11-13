@@ -1,0 +1,12 @@
+{
+  "name": "google-chat-markdown-table",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension that renders GFM markdown tables inside Google Chat message bubbles",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

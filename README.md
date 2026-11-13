@@ -1,0 +1,52 @@
+# Google Chat Markdown Table
+
+Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markdown table 自動渲染成表格。
+
+> 純前端渲染：只有安裝這個 extension 的人看得到表格，其他人看到的還是原文。
+
+## 安裝（開發版）
+
+1. 打開 `chrome://extensions`，開啟右上角「開發人員模式」
+2. 「載入未封裝項目」→ 選這個資料夾
+3. 重新整理 chat.google.com 或 mail.google.com/chat
+
+## 使用
+
+送出一般的 markdown table 即可：
+
+```
+| 服務 | 錯誤數 |
+| :-- | --: |
+| api-a | 12 |
+```
+
+**建議包在 ``` code block 裡送出**：Google Chat 會把儲存格裡的 `*x*`、`_x_` 轉成粗體或斜體，也可能吃掉空白；放在 code block 裡最穩。
+
+每張表格下方有「顯示原文 / 顯示表格」切換。
+
+## 運作方式
+
+| 模組 | 職責 |
+|---|---|
+| `src/tableParser.js` | 純函式：在文字中找出表格與其字元位置（對齊、跳脫 `\|`、補齊欄位數） |
+| `src/textExtractor.js` | 取元素文字並記錄每個 text node / `<br>` 對應的字元範圍（不依賴 layout） |
+| `src/tableRenderer.js` | 表格 → DOM，內容一律走 `textContent`（防 XSS） |
+| `src/messageEnhancer.js` | 找出含表格的訊息，**只隱藏表格那幾行的節點**並在原位插入表格；處理編輯和移除 |
+| `src/tableWatcher.js` | MutationObserver 監看新增、編輯、刪除，批次掃描 |
+| `src/contentScript.js` | 入口，把以上模組接上真實頁面 |
+
+不依賴 Google Chat 的 class 名稱（混淆過，會隨改版變動），用文字結構找訊息。表格以外的內容（清單、粗體、連結、mention）完全保留 Chat 原本的 DOM；表格那幾行只加 `data-mdtable-hidden` 屬性隱藏（純文字節點會包一層 span），切換回原文就是把它們顯示回來。
+
+## 開發
+
+```bash
+npm install
+npm test            # node:test + jsdom
+open demo/index.html  # 模擬 Chat 泡泡的本機 demo
+```
+
+## 已知限制
+
+- `mail.google.com` 整個網域都會掃描，所以 Gmail 純文字信件裡的 markdown table 也會被渲染。
+- 表格儲存格裡的連結、mention 會變成純文字，需要時可切回原文。
+- 還沒在真實的 Google Chat 驗證過 DOM 結構和 iframe 網址。
