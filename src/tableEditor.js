@@ -7,6 +7,12 @@
  */
 (function (root) {
   const ALIGN_LABELS = { null: '預設', left: '靠左', center: '置中', right: '靠右' };
+  const ARROW_STEPS = {
+    ArrowUp: { row: -1, column: 0 },
+    ArrowDown: { row: 1, column: 0 },
+    ArrowLeft: { row: 0, column: -1 },
+    ArrowRight: { row: 0, column: 1 },
+  };
 
   const STYLES = `
     :host { all: initial; }
@@ -127,7 +133,7 @@
             actionButton('add-row', '+ 列'),
             actionButton('add-column', '+ 欄'),
             element('span', { className: 'spacer' }),
-            element('span', { className: 'hint', textContent: 'Tab 切換儲存格 · ⌘/Ctrl+Enter 插入 · Esc 取消' }),
+            element('span', { className: 'hint', textContent: '方向鍵 / Tab 切換儲存格 · ⌘/Ctrl+Enter 插入 · Esc 取消' }),
             actionButton('cancel', '取消'),
             actionButton('submit', '插入', { className: 'primary' }),
           ]),
@@ -146,6 +152,29 @@
           if (event.target === backdrop) {
             close(null);
           }
+        });
+        // Spreadsheet-style arrows: up/down always move; left/right only from the edge of the text.
+        shadow.addEventListener('keydown', (event) => {
+          const input = event.target;
+          const step = ARROW_STEPS[event.key];
+          if (step === undefined || event.isComposing || !input.matches('input.cell')) {
+            return;
+          }
+          const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+          const atEnd = input.selectionStart === input.value.length;
+          if ((event.key === 'ArrowLeft' && !atStart) || (event.key === 'ArrowRight' && !atEnd)) {
+            return;
+          }
+          const target = shadow.querySelector(
+            `input[data-row="${Number(input.dataset.row) + step.row}"][data-column="${Number(input.dataset.column) + step.column}"]`,
+          );
+          if (target === null) {
+            return;
+          }
+          event.preventDefault();
+          target.focus();
+          const caret = event.key === 'ArrowRight' ? 0 : target.value.length;
+          target.setSelectionRange(caret, caret);
         });
         shadow.addEventListener('input', (event) => {
           const { row, column } = event.target.dataset;

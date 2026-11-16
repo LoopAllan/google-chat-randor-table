@@ -119,3 +119,65 @@ test('keystrokes inside the editor do not reach the page', () => {
 
   assert.equal(leaked, 0);
 });
+
+function focusedCell(shadow) {
+  const active = shadow.activeElement;
+  return active === null ? null : [Number(active.dataset.row), Number(active.dataset.column)];
+}
+
+function caretAt(input, position) {
+  input.focus();
+  input.setSelectionRange(position, position);
+}
+
+test('ArrowDown / ArrowUp move between rows in the same column', () => {
+  const { open, inputs, key, shadow } = setup();
+  open(tableModel.createTable(3, 2));
+
+  caretAt(inputs()[1], 0);
+  key(inputs()[1], { key: 'ArrowDown' });
+  assert.deepEqual(focusedCell(shadow()), [1, 1]);
+
+  key(shadow().activeElement, { key: 'ArrowUp' });
+  assert.deepEqual(focusedCell(shadow()), [0, 1]);
+});
+
+test('ArrowLeft / ArrowRight move cells only from the edge of the text', () => {
+  const { open, inputs, key, type, shadow } = setup();
+  open(tableModel.createTable(2, 2));
+  const first = inputs()[0];
+  type(first, 'abc');
+
+  caretAt(first, 1);
+  key(first, { key: 'ArrowRight' });
+  assert.deepEqual(focusedCell(shadow()), [0, 0], 'caret in the middle keeps editing the text');
+
+  caretAt(first, 3);
+  key(first, { key: 'ArrowRight' });
+  assert.deepEqual(focusedCell(shadow()), [0, 1]);
+
+  key(shadow().activeElement, { key: 'ArrowLeft' });
+  assert.deepEqual(focusedCell(shadow()), [0, 0]);
+  assert.equal(first.selectionStart, 3, 'moving left lands at the end of the text');
+});
+
+test('arrows stop at the table edges', () => {
+  const { open, inputs, key, shadow } = setup();
+  open(tableModel.createTable(2, 2));
+
+  caretAt(inputs()[0], 0);
+  key(inputs()[0], { key: 'ArrowUp' });
+  key(shadow().activeElement, { key: 'ArrowLeft' });
+
+  assert.deepEqual(focusedCell(shadow()), [0, 0]);
+});
+
+test('arrows used to pick IME candidates do not move cells', () => {
+  const { open, inputs, key, shadow } = setup();
+  open(tableModel.createTable(2, 2));
+
+  caretAt(inputs()[0], 0);
+  key(inputs()[0], { key: 'ArrowDown', isComposing: true });
+
+  assert.deepEqual(focusedCell(shadow()), [0, 0]);
+});
