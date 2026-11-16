@@ -17,6 +17,10 @@
         "src/tableRenderer.js",
         "src/messageEnhancer.js",
         "src/tableWatcher.js",
+        "src/clipboardTable.js",
+        "src/markdownTableWriter.js",
+        "src/composerInserter.js",
+        "src/pasteConverter.js",
         "src/contentScript.js"
       ],
       "css": [

@@ -24,6 +24,8 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 
 每張表格下方有「顯示原文 / 顯示表格」切換。
 
+**從 Excel / Google 試算表貼上**：在 Chat 輸入框貼上兩列兩欄以上的儲存格，會自動轉成包在 ``` 裡的 markdown table（第一列當表頭）。只在 chat.google.com 的輸入框作用，Gmail 寫信不受影響。
+
 ## 運作方式
 
 | 模組 | 職責 |
@@ -33,6 +35,10 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 | `src/tableRenderer.js` | 表格 → DOM，內容一律走 `textContent`（防 XSS） |
 | `src/messageEnhancer.js` | 找出含表格的訊息，**只隱藏表格那幾行的節點**並在原位插入表格；處理編輯和移除 |
 | `src/tableWatcher.js` | MutationObserver 監看新增、編輯、刪除，批次掃描 |
+| `src/clipboardTable.js` | 純函式：從剪貼簿（試算表的 HTML + TSV）讀出表格 |
+| `src/markdownTableWriter.js` | 純函式：rows → markdown table（跳脫 `\|`、對齊、可包 ```） |
+| `src/composerInserter.js` | 把文字寫進 Chat 輸入框：模擬貼上，失敗時改用 `insertText` |
+| `src/pasteConverter.js` | 攔截輸入框的試算表貼上，換成 markdown table |
 | `src/contentScript.js` | 入口，把以上模組接上真實頁面 |
 
 不依賴 Google Chat 的 class 名稱（混淆過，會隨改版變動），用文字結構找訊息。表格以外的內容（清單、粗體、連結、mention）完全保留 Chat 原本的 DOM；表格那幾行只加 `data-mdtable-hidden` 屬性隱藏（純文字節點會包一層 span），切換回原文就是把它們顯示回來。
