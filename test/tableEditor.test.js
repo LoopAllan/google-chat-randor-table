@@ -1,0 +1,121 @@
+'use strict';
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+const { createTableEditor } = require('../src/tableEditor.js');
+const tableModel = require('../src/tableModel.js');
+
+function setup() {
+  const { window } = new JSDOM('<!doctype html><body></body>');
+  const { document } = window;
+  const results = [];
+  const editor = createTableEditor({ doc: document, tableModel });
+  const open = (initial = tableModel.createTable(2, 2)) => editor.open(initial).then(
+    (value) => results.push(value),
+  );
+  const shadow = () => document.querySelector('.mdtable-editor-host')?.shadowRoot ?? null;
+  const inputs = () => [...shadow().querySelectorAll('input.cell')];
+  const button = (action, index) => shadow().querySelector(`[data-action="${action}"]${index === undefined ? '' : `[data-index="${index}"]`}`);
+  const key = (target, init) => target.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, composed: true, ...init }));
+  const type = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  return { document, open, results, shadow, inputs, button, key, type };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('opens an overlay with one input per cell, header first', () => {
+  const { open, inputs, shadow } = setup();
+
+  open(tableModel.fromParsed({ header: ['a', 'b'], rows: [['1', '2']], align: [null, null] }));
+
+  assert.deepEqual(inputs().map((input) => input.value), ['a', 'b', '1', '2']);
+  assert.equal(shadow().activeElement, inputs()[0]);
+});
+
+test('submit resolves with the edited table and closes the editor', async () => {
+  const { open, inputs, button, type, results, document } = setup();
+  open();
+
+  type(inputs()[0], 'name');
+  button('submit').click();
+  await tick();
+
+  assert.equal(results[0].cells[0][0], 'name');
+  assert.equal(document.querySelector('.mdtable-editor-host'), null);
+});
+
+test('cancel resolves with null', async () => {
+  const { open, button, results } = setup();
+  open();
+
+  button('cancel').click();
+  await tick();
+
+  assert.deepEqual(results, [null]);
+});
+
+test('Escape cancels and Ctrl/Cmd+Enter submits', async () => {
+  const first = setup();
+  first.open();
+  first.key(first.inputs()[0], { key: 'Escape' });
+  await tick();
+  assert.deepEqual(first.results, [null]);
+
+  const second = setup();
+  second.open();
+  second.key(second.inputs()[0], { key: 'Enter', metaKey: true });
+  await tick();
+  assert.equal(second.results.length, 1);
+  assert.notEqual(second.results[0], null);
+});
+
+test('adds a row and a column, keeping typed values', async () => {
+  const { open, inputs, button, type, results } = setup();
+  open();
+
+  type(inputs()[0], 'kept');
+  button('add-row').click();
+  button('add-column').click();
+  button('submit').click();
+  await tick();
+
+  assert.equal(results[0].cells.length, 3);
+  assert.equal(results[0].cells[0].length, 3);
+  assert.equal(results[0].cells[0][0], 'kept');
+});
+
+test('removes a body row and a column', async () => {
+  const { open, button, results } = setup();
+  open(tableModel.fromParsed({ header: ['a', 'b'], rows: [['1', '2'], ['3', '4']], align: [null, null] }));
+
+  button('remove-row', 1).click();
+  button('remove-column', 0).click();
+  button('submit').click();
+  await tick();
+
+  assert.deepEqual(results[0].cells, [['b'], ['4']]);
+});
+
+test('alignment button cycles and shows the current alignment', () => {
+  const { open, button } = setup();
+  open();
+
+  button('align', 1).click();
+
+  assert.equal(button('align', 1).textContent, '靠左');
+});
+
+test('keystrokes inside the editor do not reach the page', () => {
+  const { open, inputs, key, document } = setup();
+  let leaked = 0;
+  document.body.addEventListener('keydown', () => { leaked += 1; });
+  open();
+
+  key(inputs()[0], { key: 'a' });
+
+  assert.equal(leaked, 0);
+});

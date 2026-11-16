@@ -8,7 +8,7 @@
   const EDITABLE_SELECTOR = '[contenteditable]:not([contenteditable="false"])';
 
   /** isUserEvent is injectable because isTrusted cannot be faked in tests. */
-  function createPasteConverter({ doc, tableFromClipboard, toMarkdown, insert, isUserEvent = (event) => event.isTrusted }) {
+  function createPasteConverter({ doc, eventTarget = doc, tableFromClipboard, toMarkdown, insert, isUserEvent = (event) => event.isTrusted }) {
     function onPaste(event) {
       // Our own synthetic paste (composerInserter) must reach Chat untouched.
       if (!isUserEvent(event) || event.clipboardData === null) {
@@ -31,8 +31,8 @@
     }
 
     return {
-      start: () => doc.addEventListener('paste', onPaste, true),
-      stop: () => doc.removeEventListener('paste', onPaste, true),
+      start: () => eventTarget.addEventListener('paste', onPaste, true),
+      stop: () => eventTarget.removeEventListener('paste', onPaste, true),
     };
   }
 
