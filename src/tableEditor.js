@@ -45,8 +45,8 @@
     edit: { title: '編輯表格', submit: '更新' },
   };
 
-  /** parseGrid turns pasted clipboard text into rows of cells (spreadsheet TSV). */
-  function createTableEditor({ doc, tableModel, parseGrid }) {
+  /** readGrid({ html, text }) turns a paste into rows of cells (clipboardTable.gridFromClipboard). */
+  function createTableEditor({ doc, tableModel, readGrid }) {
     function open(initial, { mode = 'insert' } = {}) {
       const labels = MODE_LABELS[mode];
       return new Promise((resolve) => {
@@ -192,7 +192,10 @@
           if (!input.matches('input.cell') || event.clipboardData === null) {
             return;
           }
-          const block = parseGrid(event.clipboardData.getData('text/plain'));
+          const block = readGrid({
+            html: event.clipboardData.getData('text/html'),
+            text: event.clipboardData.getData('text/plain'),
+          });
           if (block.length <= 1 && (block[0]?.length ?? 0) <= 1) {
             return;
           }

@@ -4,8 +4,11 @@
 (function (root) {
   const DELIMITERS = { left: ':--', center: ':-:', right: '--:' };
 
+  const CELL_LINE_BREAK = '<br>';
+
+  /** A markdown row is one line: line breaks inside a cell become <br>, the most widely rendered convention. */
   function escapeCell(text) {
-    return text.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+    return text.split(/\r?\n/).map((line) => line.trim()).join(CELL_LINE_BREAK).replace(/\|/g, '\\|').trim();
   }
 
   function writeRow(cells) {

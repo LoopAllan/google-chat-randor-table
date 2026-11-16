@@ -44,3 +44,14 @@ test('never interprets cell content as HTML', () => {
   assert.equal(scroll.querySelector('tbody b'), null);
   assert.equal(scroll.querySelector('tbody td').textContent, '<img src=x onerror=alert(1)>');
 });
+
+test('a renderCell option renders cell markdown; the default keeps cells as plain text', () => {
+  const { renderInline } = require('../src/inlineMarkdown.js');
+  const formatted = { ...TABLE, rows: [['**Amy**<br>Lin', '90']] };
+
+  const rich = renderTable(formatted, document, { renderCell: renderInline }).querySelector('tbody td');
+  const plain = renderTable(formatted, document).querySelector('tbody td');
+
+  assert.equal(rich.innerHTML, '<strong>Amy</strong><br>Lin');
+  assert.equal(plain.textContent, '**Amy**<br>Lin');
+});

@@ -4,14 +4,19 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const { createTableEditor } = require('../src/tableEditor.js');
-const { parseClipboardGrid } = require('../src/clipboardTable.js');
+const { createClipboardReader } = require('../src/clipboardTable.js');
+const { createHtmlTableReader } = require('../src/htmlTable.js');
+const { findTables } = require('../src/tableParser.js');
 const tableModel = require('../src/tableModel.js');
+
+const { readHtmlTable } = createHtmlTableReader({ parseHtml: (html) => new JSDOM(html).window.document });
+const clipboardReader = createClipboardReader({ readHtmlTable, findTables, fromParsed: tableModel.fromParsed });
 
 function setup() {
   const { window } = new JSDOM('<!doctype html><body></body>');
   const { document } = window;
   const results = [];
-  const editor = createTableEditor({ doc: document, tableModel, parseGrid: parseClipboardGrid });
+  const editor = createTableEditor({ doc: document, tableModel, readGrid: (clipboard) => clipboardReader.gridFromClipboard(clipboard) });
   const open = (initial = tableModel.createTable(2, 2), options) => editor.open(initial, options).then(
     (value) => results.push(value),
   );
@@ -23,9 +28,10 @@ function setup() {
     input.value = value;
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   };
-  const paste = (target, text) => {
+  const paste = (target, text, html = '') => {
     const event = new window.Event('paste', { bubbles: true, cancelable: true, composed: true });
-    Object.defineProperty(event, 'clipboardData', { value: { getData: (kind) => (kind === 'text/plain' ? text : '') } });
+    const data = { 'text/plain': text, 'text/html': html };
+    Object.defineProperty(event, 'clipboardData', { value: { getData: (kind) => data[kind] ?? '' } });
     target.dispatchEvent(event);
     return event;
   };
@@ -199,6 +205,29 @@ test('pasting spreadsheet cells fills from the focused cell and grows the table'
 
   assert.equal(event.defaultPrevented, true);
   assert.deepEqual(results[0].cells, [['', '', ''], ['', 'a', 'b'], ['', 'c', 'd']]);
+});
+
+test('pasting a table from Notion fills the cells with its formatting kept as markdown', async () => {
+  const { open, inputs, paste, button, results } = setup();
+  open(tableModel.createTable(2, 2));
+  const html = '<table><tr><td><strong>順序</strong></td><td>項目</td></tr><tr><td>-2</td><td>合併 pr<ul><li>訂單</li></ul></td></tr></table>';
+
+  paste(inputs()[0], '| **順序** | 項目 |\n| --- | --- |\n| -2 | 合併 pr\n  • 訂單 |', html);
+  button('submit').click();
+  await tick();
+
+  assert.deepEqual(results[0].cells, [['**順序**', '項目'], ['-2', '合併 pr<br>• 訂單']]);
+});
+
+test('pasting a markdown table as plain text fills the cells', async () => {
+  const { open, inputs, paste, button, results } = setup();
+  open(tableModel.createTable(2, 2));
+
+  paste(inputs()[0], '| a | b |\n| - | - |\n| 1 | 2 |');
+  button('submit').click();
+  await tick();
+
+  assert.deepEqual(results[0].cells, [['a', 'b'], ['1', '2']]);
 });
 
 test('pasting a single value is left to the input', () => {

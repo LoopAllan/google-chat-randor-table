@@ -1,35 +1,39 @@
 'use strict';
 
 /**
- * Turns a parsed table into DOM. Every piece of message content goes through
- * textContent, never innerHTML: the text comes from other people's messages.
+ * Turns a parsed table into DOM. Message content never goes through
+ * innerHTML (the text comes from other people's messages): cells are plain
+ * text, or whatever DOM the injected renderCell builds (inlineMarkdown.js).
  */
 (function (root) {
-  function createCell(doc, tagName, text, align) {
+  const plainText = (text, doc) => doc.createTextNode(text);
+
+  function createCell(doc, tagName, text, align, renderCell) {
     const cell = doc.createElement(tagName);
-    cell.textContent = text;
+    cell.appendChild(renderCell(text, doc));
     if (align !== null) {
       cell.style.textAlign = align;
     }
     return cell;
   }
 
-  function createRow(doc, tagName, cells, align) {
+  function createRow(doc, tagName, cells, align, renderCell) {
     const row = doc.createElement('tr');
-    cells.forEach((text, column) => row.appendChild(createCell(doc, tagName, text, align[column])));
+    cells.forEach((text, column) => row.appendChild(createCell(doc, tagName, text, align[column], renderCell)));
     return row;
   }
 
-  function renderTable(table, doc) {
+  /** renderCell(text, doc) returns the cell's content as a Node; plain text by default. */
+  function renderTable(table, doc, { renderCell = plainText } = {}) {
     const element = doc.createElement('table');
     element.className = 'mdtable';
 
     const thead = doc.createElement('thead');
-    thead.appendChild(createRow(doc, 'th', table.header, table.align));
+    thead.appendChild(createRow(doc, 'th', table.header, table.align, renderCell));
     element.appendChild(thead);
 
     const tbody = doc.createElement('tbody');
-    table.rows.forEach((cells) => tbody.appendChild(createRow(doc, 'td', cells, table.align)));
+    table.rows.forEach((cells) => tbody.appendChild(createRow(doc, 'td', cells, table.align, renderCell)));
     element.appendChild(tbody);
 
     const scroll = doc.createElement('div');

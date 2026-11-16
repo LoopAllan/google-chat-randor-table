@@ -7,6 +7,9 @@
 (function (root) {
   const DELIMITER_CELL = /^:?-+:?$/;
   const UNESCAPED_PIPE = /(?<!\\)\|/;
+  const CELL_LINE_BREAK = '<br>';
+  // How far to look for the closing pipe of a cell with raw line breaks before giving up.
+  const MAX_CONTINUATION_LINES = 50;
 
   function splitRow(line) {
     let trimmed = line.trim();
@@ -21,6 +24,35 @@
 
   function isRowLike(line) {
     return line.trim() !== '' && line.includes('|');
+  }
+
+  const opensWithPipe = (line) => line.trim().startsWith('|');
+  const closesWithPipe = (line) => /(?<!\\)\|$/.test(line.trim());
+
+  /**
+   * Notion (and some exporters) keep line breaks inside a cell as raw newlines, so
+   * one row spans several lines: it opens with "|" but does not close with one,
+   * and the following lines (none opening with "|") continue its last cell until
+   * one closes with "|". Returns the joined row and the index after it, or null
+   * when lines[index] is not such a row; GFM then reads the line on its own.
+   */
+  function readContinuedRow(lines, index) {
+    const first = lines[index];
+    if (!opensWithPipe(first) || closesWithPipe(first)) {
+      return null;
+    }
+    const limit = Math.min(lines.length, index + 1 + MAX_CONTINUATION_LINES);
+    for (let next = index + 1; next < limit; next += 1) {
+      const line = lines[next];
+      if (line.trim() === '' || opensWithPipe(line)) {
+        return null;
+      }
+      if (closesWithPipe(line)) {
+        const parts = lines.slice(index, next + 1).map((part) => part.trim());
+        return { line: parts.join(CELL_LINE_BREAK), nextIndex: next + 1 };
+      }
+    }
+    return null;
   }
 
   function parseDelimiter(line) {
@@ -72,8 +104,9 @@
     const sourceRows = [];
     let next = index + 2;
     while (next < lines.length && isRowLike(lines[next])) {
-      sourceRows.push(splitRow(lines[next]));
-      next += 1;
+      const continued = readContinuedRow(lines, next);
+      sourceRows.push(splitRow(continued === null ? lines[next] : continued.line));
+      next = continued === null ? next + 1 : continued.nextIndex;
     }
     const rows = sourceRows.map((cells) => fitToWidth(cells, header.length));
     return { table: { header, align, rows, sourceRows }, nextIndex: next };

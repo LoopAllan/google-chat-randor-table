@@ -210,3 +210,15 @@ test('scrolling does not touch the code block at all (Chat reacts to its DOM cha
   watcher.disconnect();
   preview.stop();
 });
+
+test('a scroll right after Chat removes the code block (e.g. on send) drops the preview instead of throwing', () => {
+  const { window, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`);
+  preview.start();
+
+  // Synchronously, before the MutationObserver callback runs.
+  composer.querySelector('article').remove();
+  window.dispatchEvent(new window.Event('scroll'));
+
+  assert.equal(previews().length, 0);
+  preview.stop();
+});

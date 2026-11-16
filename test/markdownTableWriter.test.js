@@ -16,10 +16,10 @@ test('wraps the table in a code fence when asked', () => {
   assert.equal(toMarkdownTable([['a', 'b'], ['1', '2']], { fenced: true }), '```\n| a | b |\n| --- | --- |\n| 1 | 2 |\n```');
 });
 
-test('escapes pipes and flattens line breaks inside cells', () => {
+test('escapes pipes and writes line breaks inside cells as <br>', () => {
   assert.equal(
-    toMarkdownTable([['expr', 'note'], ['a | b', 'line 1\nline 2']]),
-    '| expr | note |\n| --- | --- |\n| a \\| b | line 1 line 2 |',
+    toMarkdownTable([['expr', 'note'], ['a | b', 'line 1\r\n line 2 ']]),
+    '| expr | note |\n| --- | --- |\n| a \\| b | line 1<br>line 2 |',
   );
 });
 
@@ -35,4 +35,18 @@ test('round-trips through the parser', () => {
   const [table] = findTables(toMarkdownTable(rows));
 
   assert.deepEqual([table.header, ...table.rows], rows);
+});
+
+test('a Notion table read and written back keeps every cell, formatting and line break', () => {
+  const { fromParsed } = require('../src/tableModel.js');
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures/notion-table.md'), 'utf8');
+  const [parsed] = findTables(source);
+  const table = fromParsed(parsed);
+
+  const written = toMarkdownTable(table.cells, { align: table.align });
+  const [reparsed] = findTables(written);
+
+  assert.deepEqual(fromParsed(reparsed), table);
+  assert.equal(written.split('\n').length, 8, 'one line per row: header, delimiter and 6 rows');
+  assert.match(written, /\| \[後端\] 合併 pr<br>• 訂單<br>• 網進 \|/);
 });

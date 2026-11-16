@@ -24,14 +24,17 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 
 每張表格下方有「顯示原文 / 顯示表格」切換。
 
-**從 Excel / Google 試算表貼上**：在 Chat 輸入框貼上兩列兩欄以上的儲存格，會自動轉成包在 ``` 裡的 markdown table（第一列當表頭）。只在 chat.google.com 的輸入框作用，Gmail 寫信不受影響。
+**儲存格內的格式**：支援 `**粗體**`、`*斜體*`、`~~刪除線~~`、`` `程式碼` ``、`[連結](https://…)`、直接貼網址，以及用 `<br>` 換行（GitHub 的慣例）。Notion 複製出來、儲存格內直接換行的表格也讀得懂。其他 HTML 一律當純文字顯示，連結只允許 http、https、mailto。
+
+**貼上任何表格**：從 Google 試算表、Excel、Notion、Google 文件、Confluence、網頁複製的表格（兩列兩欄以上），或一整段 markdown 表格文字，貼進 Chat 輸入框會自動轉成包在 ``` 裡的 markdown table（第一列當表頭；在程式碼區塊內貼上則不另外加 ```）。粗體、斜體、刪除線、程式碼、連結、清單會轉成 markdown，儲存格內換行轉成 `<br>`。只在 chat.google.com 的輸入框作用，Gmail 寫信不受影響。
 
 **表格編輯器**：在 Chat 輸入框按右鍵選「插入 Markdown 表格」，或按 `Option+Shift+T`（Windows：`Alt+Shift+T`）。
 
 - 游標不在表格上：開一張空白表格，按「插入」寫進游標位置
 - 游標在既有的表格上（包括 Chat 的程式碼區塊）：載入那張表格，按「更新」直接取代
 - 方向鍵 / Tab 在儲存格間移動（← → 只在文字開頭/結尾時換格）
-- 可直接貼上從 Excel / Google 試算表複製的多格內容：從游標所在的格子往右下填入，表格不夠大會自動加列加欄
+- 可直接貼上從任何地方複製的多格內容（試算表、Notion、網頁表格、markdown 表格）：從游標所在的格子往右下填入，表格不夠大會自動加列加欄
+- 儲存格顯示 markdown 原文（例如 `**粗體**`、`<br>`），更新時原樣保留
 - 可新增/刪除列與欄、設定每欄對齊；`⌘/Ctrl+Enter` 送出，`Esc` 取消
 
 **輸入框預覽**：輸入框裡程式碼區塊中的 markdown table 會直接顯示成表格，右上角有「編輯表格」（打開編輯器更新這張表格）和「顯示原文」。送出的內容不變，仍是原本的 markdown。
@@ -42,13 +45,15 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 |---|---|
 | `src/tableParser.js` | 純函式：在文字中找出表格與其字元位置（對齊、跳脫 `\|`、補齊欄位數） |
 | `src/textExtractor.js` | 取元素文字並記錄每個 text node / `<br>` 對應的字元範圍（不依賴 layout） |
-| `src/tableRenderer.js` | 表格 → DOM，內容一律走 `textContent`（防 XSS） |
+| `src/inlineMarkdown.js` | 儲存格內的 markdown（粗體、斜體、刪除線、程式碼、連結、`<br>`）→ DOM，只用 DOM API 建立節點（防 XSS） |
+| `src/tableRenderer.js` | 表格 → DOM，儲存格內容交給注入的 `renderCell`（預設純文字） |
 | `src/messageEnhancer.js` | 找出含表格的訊息，**只隱藏表格那幾行的節點**並在原位插入表格；處理編輯和移除 |
 | `src/tableWatcher.js` | MutationObserver 監看新增、編輯、刪除，批次掃描 |
-| `src/clipboardTable.js` | 純函式：從剪貼簿（試算表的 HTML + TSV）讀出表格 |
-| `src/markdownTableWriter.js` | 純函式：rows → markdown table（跳脫 `\|`、對齊、可包 ```） |
+| `src/htmlTable.js` | 從任何來源的 HTML `<table>` 讀出儲存格，格式轉 markdown、合併儲存格展開 |
+| `src/clipboardTable.js` | 從剪貼簿讀出表格：markdown 表格文字（Notion 的 HTML 會把清單拆成獨立列，純文字才正確）→ HTML 表格 → TSV |
+| `src/markdownTableWriter.js` | 純函式：rows → markdown table（跳脫 `\|`、換行轉 `<br>`、對齊、可包 ```） |
 | `src/composerInserter.js` | 把文字寫進 Chat 輸入框：模擬貼上，失敗時改用 `insertText` |
-| `src/pasteConverter.js` | 攔截輸入框的試算表貼上，換成 markdown table |
+| `src/pasteConverter.js` | 攔截輸入框的表格貼上，換成 markdown table（在程式碼區塊內不加 ```） |
 | `src/tableModel.js` | 純函式：編輯中的表格（新增/刪除列欄、對齊），不可變 |
 | `src/tableEditor.js` | 表格編輯器 UI（Shadow DOM，跟 Chat 的樣式隔離） |
 | `src/composerTableLocator.js` | 找出輸入框游標所在的表格，並建立涵蓋它的 DOM Range 以便取代 |

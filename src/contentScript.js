@@ -8,10 +8,11 @@
 (function (root) {
   const {
     createMessageEnhancer, createTableWatcher, findTables, mapText, renderTable,
-    createPasteConverter, tableFromClipboard, toMarkdownTable, createComposerInserter, browserStrategies,
-    tableModel, createTableEditor, createEditorLauncher, parseClipboardGrid, createComposerTableLocator,
-    createCodeBlockWriter, createComposerPreview,
+    createPasteConverter, createClipboardReader, createHtmlTableReader, toMarkdownTable, createComposerInserter, browserStrategies,
+    tableModel, createTableEditor, createEditorLauncher, createComposerTableLocator,
+    createCodeBlockWriter, createComposerPreview, renderInline,
   } = root.MdTable;
+  const renderFormattedTable = (table, doc) => renderTable(table, doc, { renderCell: renderInline });
   // Gmail's own compose window supports real HTML tables, so only Chat frames get composer features.
   const CHAT_HOSTNAME = 'chat.google.com';
   const OPEN_EDITOR_MESSAGE = 'mdtable:open-editor';
@@ -20,15 +21,20 @@
     const inserter = createComposerInserter(browserStrategies(document));
     const insert = (composer, text) => inserter.insert(composer, text);
 
+    // DOMParser documents are inert: no scripts run and nothing is fetched.
+    const { readHtmlTable } = createHtmlTableReader({ parseHtml: (html) => new DOMParser().parseFromString(html, 'text/html') });
+    const clipboardReader = createClipboardReader({ readHtmlTable, findTables, fromParsed: tableModel.fromParsed });
+    const writeTable = (table, { fenced }) => toMarkdownTable(table.cells, { fenced, align: table.align });
+
     createPasteConverter({
       doc: document,
       eventTarget: root,
-      tableFromClipboard,
-      toMarkdown: (rows) => toMarkdownTable(rows, { fenced: true }),
+      tableFromClipboard: (clipboard) => clipboardReader.tableFromClipboard(clipboard),
+      toMarkdown: writeTable,
       insert,
     }).start();
 
-    const editor = createTableEditor({ doc: document, tableModel, parseGrid: parseClipboardGrid });
+    const editor = createTableEditor({ doc: document, tableModel, readGrid: (clipboard) => clipboardReader.gridFromClipboard(clipboard) });
     const locator = createComposerTableLocator({ doc: document, mapText, findTables, fromParsed: tableModel.fromParsed });
     const codeBlockWriter = createCodeBlockWriter({ doc: document });
     const launcher = createEditorLauncher({
@@ -37,7 +43,7 @@
       createInitialTable: () => tableModel.createTable(3, 3),
       locateTable: (composer, caret) => locator.locate(composer, caret),
       openEditor: (initial, options) => editor.open(initial, options),
-      toMarkdown: (table, { fenced }) => toMarkdownTable(table.cells, { fenced, align: table.align }),
+      toMarkdown: writeTable,
       insert,
       replaceInCodeBlock: (codeBlock, range, markdown) => codeBlockWriter.replaceLines(codeBlock, range, markdown),
     });
@@ -56,7 +62,7 @@
       doc: document,
       findTables,
       mapText,
-      renderTable,
+      renderTable: renderFormattedTable,
       onEdit: (composer, position) => launcher.editAt(composer, position).catch((error) => console.error(error)),
       MutationObserverImpl: MutationObserver,
       schedule: (callback) => requestAnimationFrame(callback),
@@ -64,7 +70,7 @@
   }
 
   function startRenderer() {
-    const enhancer = createMessageEnhancer({ findTables, mapText, renderTable, doc: document });
+    const enhancer = createMessageEnhancer({ findTables, mapText, renderTable: renderFormattedTable, doc: document });
     createTableWatcher({
       root: document.body,
       enhancer,

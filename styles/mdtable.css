@@ -40,6 +40,19 @@ table.mdtable td {
   white-space: pre-wrap;
 }
 
+table.mdtable code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+table.mdtable a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 table.mdtable thead th {
   font-weight: 600;
   background: color-mix(in srgb, currentColor 8%, transparent);

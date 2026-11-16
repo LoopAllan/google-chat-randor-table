@@ -294,6 +294,9 @@
     }
 
     function reposition() {
+      // Scroll / resize can fire after Chat removed a block (e.g. on send) but before
+      // the MutationObserver callback refreshes, so drop blocks that left the composer.
+      [...previews.keys()].filter((block) => !block.isConnected || composerOf(block) === null).forEach(release);
       previews.forEach((entry, block) => placeOver(block, entry));
     }
 
