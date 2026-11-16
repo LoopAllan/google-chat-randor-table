@@ -223,3 +223,33 @@ test('keeps the tool bar when the code block holds more than the table', () => {
 
   assert.equal(document.getElementById('tools').hasAttribute('data-mdtable-hidden'), false);
 });
+
+test('does not stitch a table together across separate messages of a long conversation', () => {
+  const filler = `<div>${'聊天內容 '.repeat(2500)}</div>`;
+  const { document, enhancer } = setup(`<div id="list">${filler}<div>| a | b |</div><div>| --- | --- |</div><div>| 1 | 2 |</div></div>`);
+
+  enhancer.scan(document.body);
+
+  assert.equal(document.querySelectorAll('table.mdtable').length, 0);
+});
+
+test('a table message inside a long conversation is still rendered', () => {
+  const filler = `<div>${'聊天內容 '.repeat(2500)}</div>`;
+  const { document, enhancer } = setup(`<div id="list">${filler}<div id="msg">${TABLE_HTML}</div></div>`);
+
+  enhancer.scan(document.body);
+
+  assert.equal(document.querySelectorAll('table.mdtable').length, 1);
+  assert.equal(document.querySelector('[data-mdtable-container]').id, 'msg');
+});
+
+test('never renders inside the composer, even while Chat has it non-editable (restoring a draft)', () => {
+  const { document, enhancer } = setup('<div role="textbox" contenteditable="false"><article role="code">'
+    + '<div>| a | b |</div><div>| --- | --- |</div><div>| 1 | 2 |</div></article></div>'
+    + '<div role="textbox"><div>| a | b |</div><div>| --- | --- |</div><div>| 1 | 2 |</div></div>');
+
+  enhancer.scan(document.body);
+
+  assert.equal(document.querySelectorAll('.mdtable-wrapper').length, 0);
+  assert.equal(document.querySelectorAll('[data-mdtable-hidden]').length, 0);
+});

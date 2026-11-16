@@ -64,7 +64,17 @@
     return { text, leaves };
   }
 
-  const api = { mapText };
+  /**
+   * The text leaf holding a character offset of mapText's text. A range start
+   * belongs to the leaf it opens (start <= offset < end); with atEnd, a range end
+   * belongs to the leaf it closes (start < offset <= end).
+   */
+  function textLeafAt(leaves, offset, { atEnd = false } = {}) {
+    return leaves.find((leaf) => leaf.node.nodeType === TEXT_NODE
+      && (atEnd ? leaf.start < offset && offset <= leaf.end : leaf.start <= offset && offset < leaf.end));
+  }
+
+  const api = { mapText, textLeafAt };
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
   } else {

@@ -5,13 +5,14 @@ const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const { createComposerPreview } = require('../src/composerPreview.js');
 const { findTables } = require('../src/tableParser.js');
-const { mapText } = require('../src/textExtractor.js');
+const { mapText, textLeafAt } = require('../src/textExtractor.js');
+const { overlayPlacement } = require('../src/overlayGeometry.js');
 const { renderTable } = require('../src/tableRenderer.js');
 
 // Composer shape from real Chat (2026-11-16): <article role="code"> holding one <div> per line.
 const TABLE_LINES = '<div>| 欄位 | 數量 |</div><div>| :-- | --: |</div><div>| api-a | 12 |</div>';
 
-function setup(composerHtml) {
+function setup(composerHtml, { delay = (callback) => callback() } = {}) {
   const { window } = new JSDOM(`<!doctype html><body><div id="composer" role="textbox" contenteditable="true">${composerHtml}</div></body>`);
   const { document } = window;
   const edits = [];
@@ -19,10 +20,13 @@ function setup(composerHtml) {
     doc: document,
     findTables,
     mapText,
+    textLeafAt,
     renderTable,
+    overlayPlacement,
     onEdit: (composer, position) => edits.push({ composer, position }),
     MutationObserverImpl: window.MutationObserver,
     schedule: (callback) => callback(),
+    delay,
   });
   const composer = document.getElementById('composer');
   const previews = () => [...document.querySelectorAll('.mdtable-composer-preview')];
@@ -220,5 +224,146 @@ test('a scroll right after Chat removes the code block (e.g. on send) drops the 
   window.dispatchEvent(new window.Event('scroll'));
 
   assert.equal(previews().length, 0);
+  preview.stop();
+});
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('a <pre> code block in the composer is previewed like an article one', () => {
+  const { preview, previews } = setup('<pre>| a |\n| - |\n| 1 |</pre>');
+
+  preview.refresh();
+
+  assert.equal(previews().length, 1);
+});
+
+test('mutations outside every composer do not search the document again', async () => {
+  const { document, preview } = setup(`<article role="code">${TABLE_LINES}</article>`);
+  preview.start();
+  let searches = 0;
+  const original = document.querySelectorAll.bind(document);
+  document.querySelectorAll = (selector) => {
+    searches += 1;
+    return original(selector);
+  };
+
+  document.body.appendChild(document.createElement('div')).textContent = 'someone is typing…';
+  await tick();
+
+  assert.equal(searches, 0);
+  preview.stop();
+});
+
+test('a composer added later with a table in it (room switch restoring a draft) gets a preview', async () => {
+  const { document, preview, previews } = setup('');
+  preview.start();
+
+  const other = document.createElement('div');
+  other.innerHTML = `<div role="textbox" contenteditable="true"><article role="code">${TABLE_LINES}</article></div>`;
+  document.body.appendChild(other);
+  await tick();
+
+  assert.equal(previews().length, 1);
+  preview.stop();
+});
+
+test('typing inside a previewed table rebuilds it only after a pause', async () => {
+  const delayed = [];
+  const { composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`, { delay: (callback) => delayed.push(callback) });
+  preview.start();
+
+  composer.querySelector('article').lastChild.textContent = '| api-b | 340 |';
+  await tick();
+  assert.equal(previews()[0].querySelector('td').textContent, 'api-a', 'not rebuilt on every keystroke');
+
+  delayed.forEach((callback) => callback());
+  assert.equal(previews()[0].querySelector('td').textContent, 'api-b');
+  preview.stop();
+});
+
+test('the edit button points at the current text nodes even if Chat replaced them with the same text', () => {
+  const { window, composer, preview, edits, previews } = setup(`<article role="code">${TABLE_LINES}</article>`);
+  preview.refresh();
+  const firstLine = composer.querySelector('article div');
+  firstLine.replaceChild(firstLine.ownerDocument.createTextNode(firstLine.textContent), firstLine.firstChild);
+
+  click(window, previews()[0].querySelector('.mdtable-composer-edit'));
+
+  assert.equal(edits[0].position.startContainer, firstLine.firstChild);
+  assert.equal(edits[0].position.startContainer.isConnected, true);
+});
+
+test('scrolling moves the overlay to the code block using the overlay geometry', () => {
+  const { window, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`);
+  preview.start();
+  const block = composer.querySelector('article');
+  block.getBoundingClientRect = () => ({ top: 120, left: 40, bottom: 320, right: 540, width: 500, height: 200 });
+
+  window.dispatchEvent(new window.Event('scroll'));
+
+  const { style } = previews()[0];
+  assert.deepEqual([style.top, style.left, style.width, style.height], ['120px', '40px', '500px', '200px']);
+  preview.stop();
+});
+
+test('scrolling reads no computed styles (they are cached when the preview is built)', () => {
+  const { window, preview } = setup(`<article role="code">${TABLE_LINES}</article>`);
+  preview.start();
+  let reads = 0;
+  const original = window.getComputedStyle.bind(window);
+  window.getComputedStyle = (element) => {
+    reads += 1;
+    return original(element);
+  };
+
+  window.dispatchEvent(new window.Event('scroll'));
+
+  assert.equal(reads, 0);
+  preview.stop();
+});
+
+test('when the code block changes width, the table height is measured again (re-flowed table)', () => {
+  const { window, document, composer, previews } = setup('');
+  composer.innerHTML = `<article role="code">${TABLE_LINES}</article>`;
+  let notify = null;
+  const observed = [];
+  class FakeResizeObserver {
+    constructor(callback) { notify = callback; }
+    observe(target) { observed.push(target); }
+    unobserve() {}
+    disconnect() { observed.length = 0; }
+  }
+  const preview = createComposerPreview({
+    doc: document, findTables, mapText, textLeafAt, renderTable, overlayPlacement,
+    onEdit: () => {}, MutationObserverImpl: window.MutationObserver, ResizeObserverImpl: FakeResizeObserver,
+    schedule: (callback) => callback(), delay: (callback) => callback(),
+  });
+  preview.start();
+  const block = composer.querySelector('article');
+  assert.deepEqual(observed, [block]);
+
+  Object.defineProperty(previews()[0], 'offsetHeight', { value: 321 });
+  notify([{ target: block }]);
+
+  assert.match(document.querySelector('style[data-mdtable-preview-heights]').textContent, /min-height:321px/);
+  preview.stop();
+  assert.deepEqual(observed, [], 'stop disconnects the resize observer');
+});
+
+test('a draft restored into a not-yet-editable composer is previewed once Chat makes it editable', async () => {
+  const { document, preview, previews } = setup('');
+  preview.start();
+  const restored = document.createElement('div');
+  restored.setAttribute('role', 'textbox');
+  restored.setAttribute('contenteditable', 'false');
+  restored.innerHTML = `<article role="code">${TABLE_LINES}</article>`;
+  document.body.appendChild(restored);
+  await tick();
+  assert.equal(previews().length, 0);
+
+  restored.setAttribute('contenteditable', 'true');
+  await tick();
+
+  assert.equal(previews().length, 1);
   preview.stop();
 });

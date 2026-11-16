@@ -127,7 +127,10 @@
       }
       const contentStart = index + marker.length;
       const intraword = marker[0] === '_';
-      if (isWhitespace(source[contentStart]) || (intraword && isWordCharacter(source[index - 1]))) {
+      // A shorter marker must not open with part of a longer run ("~~a~" is not "~" + "~a~").
+      const insideRun = (position) => source[position] === marker[0];
+      if (isWhitespace(source[contentStart]) || (intraword && isWordCharacter(source[index - 1]))
+        || insideRun(contentStart)) {
         continue;
       }
       for (let close = source.indexOf(marker, contentStart + 1); close !== -1; close = source.indexOf(marker, close + 1)) {
@@ -135,8 +138,8 @@
         if (isWhitespace(source[close - 1]) || (intraword && isWordCharacter(source[after]))) {
           continue;
         }
-        // "*a**" must not close a single "*" with the first half of "**".
-        if (source[after] === marker[0] && marker.length < 3) {
+        // Nor close with part of one: in "*a **b** c*" the "**" pair belongs to the strong.
+        if (insideRun(close - 1) || insideRun(after)) {
           continue;
         }
         return { tags, content: source.slice(contentStart, close), end: after };

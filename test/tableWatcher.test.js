@@ -110,3 +110,74 @@ test('stop disconnects the observer', async () => {
 
   assert.equal(document.querySelector('table.mdtable'), null);
 });
+
+/** Counts mapText calls, the expensive part of checking a message (walks it and rebuilds its text). */
+function setupCounting(bodyHtml) {
+  const { window } = new JSDOM('<!doctype html><body></body>');
+  const { document } = window;
+  document.body.innerHTML = bodyHtml;
+  const counter = { reads: 0 };
+  const countingMapText = (...args) => {
+    counter.reads += 1;
+    return mapText(...args);
+  };
+  const enhancer = createMessageEnhancer({ findTables, mapText: countingMapText, renderTable, doc: document });
+  const watcher = createTableWatcher({
+    root: document.body,
+    enhancer,
+    MutationObserverImpl: window.MutationObserver,
+    schedule: (callback) => setTimeout(callback, 0),
+  });
+  return { document, watcher, enhancer, counter };
+}
+
+test('rendering a table does not make the watcher re-check the message for its own DOM changes', async () => {
+  const { document, watcher, enhancer, counter } = setupCounting('<div id="list"></div>');
+  watcher.start();
+  let readsAfterRender = null;
+  const scan = enhancer.scan;
+  enhancer.scan = (node) => {
+    scan(node);
+    readsAfterRender = counter.reads;
+  };
+
+  // Text around the table: rendering splits and wraps text nodes inside the message.
+  document.getElementById('list').innerHTML = `<div>intro<br>${TABLE_HTML}<br>outro</div>`;
+  await flush();
+  await flush();
+
+  assert.equal(document.querySelectorAll('table.mdtable').length, 1);
+  assert.equal(counter.reads, readsAfterRender, 'no reads after the render finished');
+  watcher.stop();
+});
+
+test('several changes to one rendered message in a batch check it once', async () => {
+  const { document, watcher, counter } = setupCounting(`<span id="msg">${TABLE_HTML}</span><span id="other">hi</span>`);
+  watcher.start();
+  await flush();
+  const before = counter.reads;
+
+  // Chat decorating a message (e.g. reactions): several mutations inside it, one batch, same text.
+  const message = document.getElementById('msg');
+  message.appendChild(document.createElement('span'));
+  message.appendChild(document.createElement('span'));
+  message.appendChild(document.createElement('span'));
+  await flush();
+
+  assert.equal(counter.reads - before, 1);
+  watcher.stop();
+});
+
+test('a rendered table that ends up in an editable area (composer turned editable) is undone', async () => {
+  const { document, watcher } = setup(`<div id="box"><span id="msg">${TABLE_HTML}</span></div>`);
+  watcher.start();
+  assert.equal(document.querySelectorAll('.mdtable-wrapper').length, 1);
+
+  document.getElementById('box').setAttribute('contenteditable', 'true');
+  await flush();
+
+  assert.equal(document.querySelectorAll('.mdtable-wrapper').length, 0, 'our table must never become draft content');
+  assert.equal(document.querySelectorAll('[data-mdtable-hidden]').length, 0);
+  assert.equal(document.getElementById('msg').innerHTML, TABLE_HTML, 'the original text is back as it was');
+  watcher.stop();
+});

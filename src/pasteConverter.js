@@ -5,8 +5,8 @@
  * Listens in the capture phase so it runs before Chat's own paste handler.
  */
 (function (root) {
-  const EDITABLE_SELECTOR = '[contenteditable]:not([contenteditable="false"])';
-  const CODE_BLOCK_SELECTOR = '[role="code"], pre';
+  // Chat DOM knowledge lives in chatDom.js (loaded first by the manifest).
+  const chatDom = typeof module === 'object' && module.exports ? require('./chatDom.js') : root.MdTable.chatDom;
 
   /**
    * isUserEvent is injectable because isTrusted cannot be faked in tests.
@@ -21,9 +21,7 @@
     function caretInCodeBlock(composer) {
       const selection = doc.getSelection();
       const node = selection === null || selection.rangeCount === 0 ? null : selection.getRangeAt(0).startContainer;
-      const element = node === null ? null : (node.nodeType === 1 ? node : node.parentElement);
-      const block = element === null ? null : element.closest(CODE_BLOCK_SELECTOR);
-      return block !== null && composer.contains(block);
+      return chatDom.codeBlockAncestor(node, composer) !== null;
     }
 
     function onPaste(event) {
@@ -31,7 +29,7 @@
       if (!isUserEvent(event) || event.clipboardData === null) {
         return;
       }
-      const composer = event.target.nodeType === 1 ? event.target.closest(EDITABLE_SELECTOR) : null;
+      const composer = chatDom.editableAncestor(event.target);
       if (composer === null) {
         return;
       }

@@ -7,7 +7,8 @@
  * inserting.
  */
 (function (root) {
-  const EDITABLE_SELECTOR = '[contenteditable]:not([contenteditable="false"])';
+  // Chat DOM knowledge lives in chatDom.js (loaded first by the manifest).
+  const chatDom = typeof module === 'object' && module.exports ? require('./chatDom.js') : root.MdTable.chatDom;
 
   function isShortcut(event) {
     return event.altKey && event.shiftKey && !event.metaKey && !event.ctrlKey && event.code === 'KeyT';
@@ -28,7 +29,7 @@
     let contextMenuTarget = null;
 
     function editableFrom(target) {
-      return target !== null && target.nodeType === 1 ? target.closest(EDITABLE_SELECTOR) : null;
+      return target !== null && target.nodeType === 1 ? chatDom.editableAncestor(target) : null;
     }
 
     function saveCaret(composer) {
@@ -40,15 +41,7 @@
       return composer.contains(range.startContainer) ? range.cloneRange() : null;
     }
 
-    function restoreCaret(composer, range) {
-      composer.focus();
-      if (range === null) {
-        return;
-      }
-      const selection = doc.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
+    const restoreCaret = chatDom.setCaret;
 
     /** Opens the editor for the table at position (a collapsed range in composer), or a new table. */
     async function editAt(composer, position) {

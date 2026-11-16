@@ -246,3 +246,17 @@ test('edit mode changes the title and the submit label', () => {
   assert.equal(button('submit').textContent, '更新');
   assert.match(shadow().querySelector('.hint').textContent, /試算表/);
 });
+
+test('clicking the dimmed backdrop cancels, clicking inside the dialog does not', async () => {
+  const { open, shadow, results, inputs } = setup();
+  open();
+  const backdrop = shadow().querySelector('.backdrop');
+
+  inputs()[0].dispatchEvent(new backdrop.ownerDocument.defaultView.MouseEvent('mousedown', { bubbles: true, composed: true }));
+  await tick();
+  assert.deepEqual(results, []);
+
+  backdrop.dispatchEvent(new backdrop.ownerDocument.defaultView.MouseEvent('mousedown', { bubbles: true }));
+  await tick();
+  assert.deepEqual(results, [null]);
+});

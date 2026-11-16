@@ -54,3 +54,16 @@ test('maps text nodes and <br> elements to their character ranges', () => {
     ['#text', 3, 5],
   ]);
 });
+
+const { textLeafAt } = require('../src/textExtractor.js');
+
+test('textLeafAt finds the text node holding an offset; atEnd picks the node a range end belongs to', () => {
+  const { document } = new JSDOM('<!doctype html><body><div id="x"><div>ab</div><div>cd</div></div></body>').window;
+  const { leaves } = mapText(document.getElementById('x'));
+  const [ab, cd] = [...document.querySelectorAll('#x div')].map((div) => div.firstChild);
+
+  assert.equal(textLeafAt(leaves, 0).node, ab);
+  assert.equal(textLeafAt(leaves, 3).node, cd, 'offset 3 is the start of "cd" (after the line break)');
+  assert.equal(textLeafAt(leaves, 2, { atEnd: true }).node, ab, 'end offset 2 closes "ab"');
+  assert.equal(textLeafAt(leaves, 99), undefined);
+});

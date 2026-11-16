@@ -7,7 +7,7 @@
  */
 (function (root) {
   const {
-    createMessageEnhancer, createTableWatcher, findTables, mapText, renderTable,
+    createMessageEnhancer, createTableWatcher, findTables, mapText, textLeafAt, renderTable, overlayPlacement,
     createPasteConverter, createClipboardReader, createHtmlTableReader, toMarkdownTable, createComposerInserter, browserStrategies,
     tableModel, createTableEditor, createEditorLauncher, createComposerTableLocator,
     createCodeBlockWriter, createComposerPreview, renderInline,
@@ -35,7 +35,7 @@
     }).start();
 
     const editor = createTableEditor({ doc: document, tableModel, readGrid: (clipboard) => clipboardReader.gridFromClipboard(clipboard) });
-    const locator = createComposerTableLocator({ doc: document, mapText, findTables, fromParsed: tableModel.fromParsed });
+    const locator = createComposerTableLocator({ doc: document, mapText, textLeafAt, findTables, fromParsed: tableModel.fromParsed });
     const codeBlockWriter = createCodeBlockWriter({ doc: document });
     const launcher = createEditorLauncher({
       doc: document,
@@ -62,9 +62,12 @@
       doc: document,
       findTables,
       mapText,
+      textLeafAt,
+      overlayPlacement,
       renderTable: renderFormattedTable,
       onEdit: (composer, position) => launcher.editAt(composer, position).catch((error) => console.error(error)),
       MutationObserverImpl: MutationObserver,
+      ResizeObserverImpl: ResizeObserver,
       schedule: (callback) => requestAnimationFrame(callback),
     }).start();
   }

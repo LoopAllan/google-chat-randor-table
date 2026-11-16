@@ -12,11 +12,21 @@
     let flushScheduled = false;
     let observer = null;
 
+    /**
+     * Rendering rewrites nodes inside the message (split, wrap, insert), which would
+     * come back as mutations and re-check the message once per record. Only our own
+     * synchronous writes are queued at this point, so they are dropped.
+     */
+    function dropOwnRecords() {
+      observer?.takeRecords();
+    }
+
     function flush() {
       flushScheduled = false;
       const nodes = [...pending];
       pending.clear();
       nodes.filter((node) => node.isConnected).forEach((node) => enhancer.scan(node));
+      dropOwnRecords();
     }
 
     function queueScan(node) {
@@ -27,10 +37,24 @@
       }
     }
 
-    function handleMutation(mutation) {
+    /** checked: messages already re-checked in this batch; one check covers all their records. */
+    function handleMutation(mutation, checked) {
+      if (mutation.type === 'attributes') {
+        // Only the attributes that turn an area into a typing area are observed.
+        enhancer.releaseInTypingAreas(mutation.target);
+        return;
+      }
       mutation.removedNodes.forEach((node) => enhancer.releaseWithin(node));
 
-      if (enhancer.isOwnNode(mutation.target) || enhancer.refreshAround(mutation.target)) {
+      if (enhancer.isOwnNode(mutation.target)) {
+        return;
+      }
+      const container = enhancer.containerOf(mutation.target);
+      if (container !== null) {
+        if (!checked.has(container)) {
+          checked.add(container);
+          enhancer.refreshAround(container);
+        }
         return;
       }
       if (mutation.type === 'characterData') {
@@ -46,8 +70,15 @@
 
     function start() {
       enhancer.scan(watchRoot);
-      observer = new MutationObserverImpl((mutations) => mutations.forEach(handleMutation));
-      observer.observe(watchRoot, { childList: true, subtree: true, characterData: true });
+      observer = new MutationObserverImpl((mutations) => {
+        const checked = new Set();
+        mutations.forEach((mutation) => handleMutation(mutation, checked));
+        // A re-render above wrote into the message; those records are ours.
+        dropOwnRecords();
+      });
+      observer.observe(watchRoot, {
+        childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['contenteditable', 'role'],
+      });
     }
 
     function stop() {

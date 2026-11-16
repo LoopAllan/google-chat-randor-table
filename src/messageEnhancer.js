@@ -15,23 +15,27 @@
   const SHOW_TEXT = 4;
   const TEXT_NODE = 3;
   const MAX_ANCESTOR_DEPTH = 8;
+  // Chat caps a message at about 4,000 characters, so a larger element is a list of
+  // messages: climbing further would stitch a table together across messages and
+  // re-read the whole conversation on every change inside it.
+  const MAX_CONTAINER_TEXT = 10000;
+  const VERDICT = { HAS_TABLE: 'has-table', NO_TABLE: 'no-table', TOO_LARGE: 'too-large' };
   const CONTAINER_ATTRIBUTE = 'data-mdtable-container';
   const HIDDEN_ATTRIBUTE = 'data-mdtable-hidden';
   const WRAPPER_CLASS = 'mdtable-wrapper';
   const SOURCE_SPAN_CLASS = 'mdtable-source';
+  // Chat DOM knowledge lives in chatDom.js (loaded first by the manifest).
+  const chatDom = typeof module === 'object' && module.exports ? require('./chatDom.js') : root.MdTable.chatDom;
   const EXCLUDED_SELECTOR = [
     `.${WRAPPER_CLASS}`,
     `[${CONTAINER_ATTRIBUTE}]`,
     // The composer preview layer (composerPreview.js) renders its own tables.
-    '.mdtable-composer-layer',
-    '[contenteditable]:not([contenteditable="false"])',
+    `.${chatDom.PREVIEW_LAYER_CLASS}`,
+    chatDom.TYPING_AREA,
     'textarea',
     'script',
     'style',
   ].join(',');
-  const CODE_BLOCK_SELECTOR = '[role="code"], pre';
-  // Chat's tool bar next to a sent code block (word-wrap toggle), verified 2026-11-16.
-  const CODE_BLOCK_TOOLS_SELECTOR = '[exclude-from-clipboard]';
   const LABEL_SHOW_SOURCE = '顯示原文';
   const LABEL_SHOW_TABLE = '顯示表格';
 
@@ -55,6 +59,13 @@
       return parent === null || parent.closest(EXCLUDED_SELECTOR) !== null;
     }
 
+    function verdictFor(text) {
+      if (text.length > MAX_CONTAINER_TEXT) {
+        return VERDICT.TOO_LARGE;
+      }
+      return hasTable(text) ? VERDICT.HAS_TABLE : VERDICT.NO_TABLE;
+    }
+
     function findContainerFrom(textNode, cache) {
       let element = textNode.parentElement;
       for (let depth = 0; depth < MAX_ANCESTOR_DEPTH && element !== null; depth += 1) {
@@ -62,9 +73,13 @@
           return null;
         }
         if (!cache.has(element)) {
-          cache.set(element, hasTable(readMap(element).text));
+          cache.set(element, verdictFor(readMap(element).text));
         }
-        if (cache.get(element)) {
+        const verdict = cache.get(element);
+        if (verdict === VERDICT.TOO_LARGE) {
+          return null;
+        }
+        if (verdict === VERDICT.HAS_TABLE) {
           return element;
         }
         element = element.parentElement;
@@ -149,28 +164,28 @@
      */
     function codeBlockToolsOf(hidden) {
       return hidden
-        .filter((element) => element.matches(CODE_BLOCK_SELECTOR))
+        .filter((element) => element.matches(chatDom.CODE_BLOCK))
         .flatMap((block) => [...block.parentElement.children]
-          .filter((sibling) => sibling !== block && sibling.matches(CODE_BLOCK_TOOLS_SELECTOR)));
+          .filter((sibling) => sibling !== block && sibling.matches(chatDom.CODE_BLOCK_TOOLS)));
     }
 
     // ---- rendering -----------------------------------------------------------
 
     function setGroupState(group, state) {
       group.hidden.forEach((element) => element.setAttribute(HIDDEN_ATTRIBUTE, state));
-      group.wrapper.querySelector('.mdtable-scroll').hidden = state === 'source';
-      group.wrapper.querySelector('.mdtable-toggle').textContent = state === 'table' ? LABEL_SHOW_SOURCE : LABEL_SHOW_TABLE;
+      group.rendered.hidden = state === 'source';
+      group.toggle.textContent = state === 'table' ? LABEL_SHOW_SOURCE : LABEL_SHOW_TABLE;
     }
 
     function createWrapper(table) {
       const wrapper = doc.createElement('div');
       wrapper.className = WRAPPER_CLASS;
-      wrapper.appendChild(renderTable(table, doc));
+      const rendered = wrapper.appendChild(renderTable(table, doc));
       const toggle = doc.createElement('button');
       toggle.type = 'button';
       toggle.className = 'mdtable-toggle';
       wrapper.appendChild(toggle);
-      return wrapper;
+      return { wrapper, rendered, toggle };
     }
 
     function renderGroup(container, leaves, range) {
@@ -178,12 +193,12 @@
         .filter((leaf) => leaf.start >= range.start && leaf.end <= range.end)
         .map((leaf) => leaf.node);
       const { hidden, spans } = toHideableElements(topmostNodesIn(container, rangeLeaves));
-      const wrapper = createWrapper(range.table);
+      const { wrapper, rendered, toggle } = createWrapper(range.table);
       hidden[0].parentNode.insertBefore(wrapper, hidden[0]);
       hidden.push(...codeBlockToolsOf(hidden));
 
-      const group = { wrapper, hidden, spans };
-      wrapper.querySelector('.mdtable-toggle').addEventListener('click', (event) => {
+      const group = { wrapper, rendered, toggle, hidden, spans };
+      toggle.addEventListener('click', (event) => {
         // Keep Chat's own click handlers (open thread, select message) out of it.
         event.stopPropagation();
         const showingTable = hidden[0].getAttribute(HIDDEN_ATTRIBUTE) === 'table';
@@ -242,10 +257,15 @@
       containers.forEach(enhance);
     }
 
+    /** The processed message holding node, or null. */
+    function containerOf(node) {
+      const element = node.nodeType === 1 ? node : node.parentElement;
+      return element === null ? null : element.closest(`[${CONTAINER_ATTRIBUTE}]`);
+    }
+
     /** Re-renders the processed message containing node, if any. Returns whether one was found. */
     function refreshAround(node) {
-      const element = node.nodeType === 1 ? node : node.parentElement;
-      const container = element === null ? null : element.closest(`[${CONTAINER_ATTRIBUTE}]`);
+      const container = containerOf(node);
       if (container === null) {
         return false;
       }
@@ -258,17 +278,27 @@
       return true;
     }
 
-    /** Cleans up rendered tables whose message (node or a descendant) was removed by Chat. */
-    function releaseWithin(node) {
+    /** Processed messages at or under node. */
+    function containersWithin(node) {
       if (node.nodeType !== 1) {
-        return;
+        return [];
       }
       const containers = node.matches(`[${CONTAINER_ATTRIBUTE}]`) ? [node] : [];
       containers.push(...node.querySelectorAll(`[${CONTAINER_ATTRIBUTE}]`));
-      containers.forEach(release);
+      return containers;
     }
 
-    return { scan, refreshAround, releaseWithin, isOwnNode };
+    /** Cleans up rendered tables whose message (node or a descendant) was removed by Chat. */
+    function releaseWithin(node) {
+      containersWithin(node).forEach(release);
+    }
+
+    /** Undoes rendered tables under node that now sit in a typing area (e.g. the composer became editable). */
+    function releaseInTypingAreas(node) {
+      containersWithin(node).filter((container) => container.closest(chatDom.TYPING_AREA) !== null).forEach(release);
+    }
+
+    return { scan, containerOf, refreshAround, releaseWithin, releaseInTypingAreas, isOwnNode };
   }
 
   const api = { createMessageEnhancer };

@@ -10,9 +10,10 @@
  */
 (function (root) {
   const TEXT_NODE = 3;
-  const CODE_BLOCK_SELECTOR = '[role="code"], pre';
+  // Chat DOM knowledge lives in chatDom.js (loaded first by the manifest).
+  const chatDom = typeof module === 'object' && module.exports ? require('./chatDom.js') : root.MdTable.chatDom;
 
-  function createComposerTableLocator({ doc, mapText, findTables, fromParsed }) {
+  function createComposerTableLocator({ doc, mapText, textLeafAt, findTables, fromParsed }) {
     function caretOffset(leaves, textLength, caret) {
       const container = caret.startContainer;
       if (container.nodeType === TEXT_NODE) {
@@ -24,14 +25,9 @@
       return following === undefined ? textLength : following.start;
     }
 
-    function textLeafAt(leaves, offset, isEnd) {
-      return leaves.find((leaf) => leaf.node.nodeType === TEXT_NODE
-        && (isEnd ? leaf.start < offset && offset <= leaf.end : leaf.start <= offset && offset < leaf.end));
-    }
-
     function rangeFor(leaves, start, end) {
-      const first = textLeafAt(leaves, start, false);
-      const last = textLeafAt(leaves, end, true);
+      const first = textLeafAt(leaves, start);
+      const last = textLeafAt(leaves, end, { atEnd: true });
       if (first === undefined || last === undefined) {
         throw new Error(`[md-table] could not map table text [${start}, ${end}) back to composer nodes`);
       }
@@ -53,11 +49,11 @@
         return null;
       }
       const range = rangeFor(leaves, table.start, table.end);
-      const codeBlock = range.startContainer.parentElement.closest(CODE_BLOCK_SELECTOR);
+      const codeBlock = chatDom.codeBlockAncestor(range.startContainer, composer);
       return {
         initial: fromParsed(table),
         range,
-        codeBlock: codeBlock !== null && composer.contains(codeBlock) ? codeBlock : null,
+        codeBlock,
       };
     }
 

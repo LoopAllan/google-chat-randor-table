@@ -67,3 +67,11 @@ test('ignores styles, scripts and the Google Sheets wrapper', () => {
 
   assert.deepEqual(readHtmlTable(html), [['a', 'b']]);
 });
+
+test('a link whose href is not a URL keeps only its text', () => {
+  assert.deepEqual(readHtmlTable(table('<tr><td><a href="not a url">文件</a></td><td>x</td></tr>')), [['文件', 'x']]);
+});
+
+test('a cell merged down the first column pushes the next row\'s cells to the right', () => {
+  assert.deepEqual(readHtmlTable(table('<tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr>')), [['a', 'b'], ['', 'c']]);
+});

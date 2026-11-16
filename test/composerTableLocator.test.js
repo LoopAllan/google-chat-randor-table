@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const { createComposerTableLocator } = require('../src/composerTableLocator.js');
 const { findTables } = require('../src/tableParser.js');
-const { mapText } = require('../src/textExtractor.js');
+const { mapText, textLeafAt } = require('../src/textExtractor.js');
 const tableModel = require('../src/tableModel.js');
 
 // Shapes taken from the real Chat composer (2026-11-16): one <div> per line,
@@ -19,7 +19,7 @@ function setup(html) {
   const { window } = new JSDOM(`<!doctype html><body>${html}</body>`);
   const { document } = window;
   const composer = document.getElementById('composer');
-  const locator = createComposerTableLocator({ doc: document, mapText, findTables, fromParsed: tableModel.fromParsed });
+  const locator = createComposerTableLocator({ doc: document, mapText, textLeafAt, findTables, fromParsed: tableModel.fromParsed });
   const caretIn = (lineIndex, offset) => {
     const line = composer.querySelectorAll('div')[lineIndex];
     const range = document.createRange();
@@ -71,4 +71,14 @@ test('handles a caret placed on an element boundary rather than in text', () => 
   range.collapse(true);
 
   assert.notEqual(locator.locate(composer, range), null);
+});
+
+test('returns null when the caret is in a node that is not part of the composer text', () => {
+  const { document, composer, locator } = setup(PLAIN_COMPOSER);
+  const outside = document.body.appendChild(document.createElement('p'));
+  outside.textContent = '| a |';
+  const range = document.createRange();
+  range.setStart(outside.firstChild, 1);
+
+  assert.equal(locator.locate(composer, range), null);
 });

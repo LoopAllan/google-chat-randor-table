@@ -201,3 +201,29 @@ test('without an existing table, opens in insert mode and writes a fenced table'
   assert.deepEqual(env.opened[0].options, { mode: 'insert' });
   assert.equal(env.inserted[0].text, 'MD');
 });
+
+test('with no caret inside the composer, opens a new table and inserts it into the focused composer', async () => {
+  const { document, composer, launcher, inserted, opened } = setup();
+  composer.focus();
+  const elsewhere = document.createRange();
+  elsewhere.setStart(document.getElementById('other').firstChild, 0);
+  document.getSelection().removeAllRanges();
+  document.getSelection().addRange(elsewhere);
+
+  await launcher.openFromContextMenu();
+
+  assert.deepEqual(opened[0].options, { mode: 'insert' });
+  assert.equal(inserted[0].id, 'composer');
+  assert.equal(document.activeElement, composer);
+});
+
+test('stop removes the shortcut listener', async () => {
+  const { composer, launcher, opened, placeCaret, shortcut } = setup();
+  launcher.stop();
+  placeCaret(0);
+
+  shortcut(composer);
+  await tick();
+
+  assert.equal(opened.length, 0);
+});

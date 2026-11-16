@@ -102,3 +102,20 @@ test('a markdown table already wrapped in a ``` fence is read too', () => {
   assert.deepEqual(tableFromClipboard({ html: '', text: '```\n| a | b |\n| - | - |\n| 1 | 2 |\n```\n' }), [['a', 'b'], ['1', '2']]);
   assert.deepEqual(tableFromClipboard({ html: '', text: '```markdown\n| a |\n| - |\n| 1 |\n```' }), [['a'], ['1']]);
 });
+
+test('a spreadsheet paste (HTML table + TSV, no markdown) reads the HTML cells, keeping formatting', () => {
+  const html = '<google-sheets-html-origin><table><tr><td style="font-weight:bold">名稱</td><td>連結</td></tr>'
+    + '<tr><td>a<br>b</td><td><a href="https://a.tw/x">文件</a></td></tr></table></google-sheets-html-origin>';
+
+  const table = reader.tableFromClipboard({ html, text: '名稱\t連結\n"a\nb"\t文件' });
+
+  assert.deepEqual(table, { cells: [['**名稱**', '連結'], ['a<br>b', '[文件](https://a.tw/x)']], align: [null, null] });
+});
+
+test('when the HTML table is too small to read, falls back to the TSV text', () => {
+  assert.deepEqual(tableFromClipboard({ html: '<table><tr><td>x</td></tr></table>', text: 'a\tb\n1\t2' }), [['a', 'b'], ['1', '2']]);
+});
+
+test('an unterminated quote in TSV keeps the rest of the text in that cell', () => {
+  assert.deepEqual(reader.gridFromClipboard({ html: '', text: 'a\t"open' }), [['a', 'open']]);
+});

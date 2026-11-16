@@ -43,6 +43,7 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 
 | 模組 | 職責 |
 |---|---|
+| `src/chatDom.js` | Google Chat DOM 結構的唯一來源（輸入框、程式碼區塊、工具列的選擇器、設定游標）；Chat 改版時只改這裡 |
 | `src/tableParser.js` | 純函式：在文字中找出表格與其字元位置（對齊、跳脫 `\|`、補齊欄位數） |
 | `src/textExtractor.js` | 取元素文字並記錄每個 text node / `<br>` 對應的字元範圍（不依賴 layout） |
 | `src/inlineMarkdown.js` | 儲存格內的 markdown（粗體、斜體、刪除線、程式碼、連結、`<br>`）→ DOM，只用 DOM API 建立節點（防 XSS） |
@@ -58,6 +59,7 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 | `src/tableEditor.js` | 表格編輯器 UI（Shadow DOM，跟 Chat 的樣式隔離） |
 | `src/composerTableLocator.js` | 找出輸入框游標所在的表格，並建立涵蓋它的 DOM Range 以便取代 |
 | `src/codeBlockWriter.js` | 直接改寫 Chat 程式碼區塊裡表格那幾行（選取後貼上會破壞程式碼區塊） |
+| `src/overlayGeometry.js` | 純函式：預覽疊在程式碼區塊上的位置、裁切與按鈕列位置 |
 | `src/composerPreview.js` | 輸入框預覽：在程式碼區塊上疊一層表格（在可編輯區外），滾動交回輸入框、點擊把游標放到表格後 |
 | `src/editorLauncher.js` | 快捷鍵 / 右鍵選單開啟編輯器，保存並還原游標位置後插入 |
 | `src/background.js` | Service worker：建立右鍵選單，轉送到被點的 frame |

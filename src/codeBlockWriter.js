@@ -10,7 +10,8 @@
  * sync: the sent message is exactly the new table.
  */
 (function (root) {
-  const EDITABLE_SELECTOR = '[contenteditable]:not([contenteditable="false"])';
+  // Chat DOM knowledge lives in chatDom.js (loaded first by the manifest).
+  const chatDom = typeof module === 'object' && module.exports ? require('./chatDom.js') : root.MdTable.chatDom;
 
   function createCodeBlockWriter({ doc }) {
     /** The direct child of codeBlock holding node (a line <div>, or a stray bare text line). */
@@ -23,13 +24,10 @@
     }
 
     function placeCaretAtEnd(composer, element) {
-      composer.focus();
       const caret = doc.createRange();
       caret.setStart(element.firstChild, element.firstChild.length);
       caret.collapse(true);
-      const selection = doc.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(caret);
+      chatDom.setCaret(composer, caret);
     }
 
     function replaceLines(codeBlock, range, markdown) {
@@ -50,7 +48,7 @@
       last.after(...newLines);
       covered.forEach((line) => line.remove());
 
-      const composer = codeBlock.closest(EDITABLE_SELECTOR);
+      const composer = chatDom.editableAncestor(codeBlock);
       placeCaretAtEnd(composer, newLines[newLines.length - 1]);
       composer.dispatchEvent(new doc.defaultView.InputEvent('input', { bubbles: true, inputType: 'insertReplacementText' }));
     }

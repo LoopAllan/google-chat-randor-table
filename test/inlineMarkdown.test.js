@@ -72,3 +72,30 @@ test('never lets message text become HTML or a script URL', () => {
   assert.equal(html('[click](javascript:alert(1))'), '[click](javascript:alert(1))');
   assert.equal(html('[x](data:text/html,hi)'), '[x](data:text/html,hi)');
 });
+
+test('a single marker never pairs with half of a longer run', () => {
+  assert.equal(html('*a **b** c*'), '<em>a <strong>b</strong> c</em>');
+  assert.equal(html('~~a~ b'), '~~a~ b');
+  assert.equal(html('*a**'), '*a**');
+});
+
+test('malformed links and URLs stay literal text', () => {
+  assert.equal(html('[a] b'), '[a] b');
+  assert.equal(html('[x](not a url)'), '[x](not a url)');
+  assert.equal(html('see https://'), 'see https://');
+  assert.equal(html('ahttps://a.tw'), 'ahttps://a.tw', 'a URL glued to a word is not linked');
+});
+
+test('a backslash-escaped bracket stays inside the link text', () => {
+  assert.equal(html('[a\\]b](https://x.tw)'), '<a href="https://x.tw/" target="_blank" rel="noopener noreferrer">a]b</a>');
+});
+
+test('code spans: an unmatched backtick run is literal; one surrounding space is trimmed', () => {
+  assert.equal(html('``a'), '``a');
+  assert.equal(html('` a `'), '<code>a</code>');
+});
+
+test('underscores touching a word on either side are not emphasis', () => {
+  assert.equal(html('x_y_ z'), 'x_y_ z');
+  assert.equal(html('_a_b'), '_a_b');
+});
