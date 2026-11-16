@@ -6,7 +6,8 @@ const { JSDOM } = require('jsdom');
 const { createEditorLauncher } = require('../src/editorLauncher.js');
 const tableModel = require('../src/tableModel.js');
 
-function setup({ editorResult = tableModel.createTable(2, 2) } = {}) {
+function setup({ editorResult = tableModel.createTable(2, 2), locateTable } = {}) {
+  const replaced = [];
   const { window } = new JSDOM('<!doctype html><body><div id="composer" contenteditable="true">hello</div><p id="other">x</p></body>');
   const { document } = window;
   const composer = document.getElementById('composer');
@@ -16,17 +17,24 @@ function setup({ editorResult = tableModel.createTable(2, 2) } = {}) {
     doc: document,
     eventTarget: window,
     createInitialTable: () => tableModel.createTable(3, 3),
-    openEditor: (initial) => {
-      opened.push(initial);
+    locateTable,
+    openEditor: (initial, options) => {
+      opened.push({ initial, options });
       // The editor takes focus away from the composer, like the real one.
       document.getElementById('other').focus();
       document.getSelection().removeAllRanges();
       return Promise.resolve(editorResult);
     },
-    toMarkdown: () => 'MD',
+    toMarkdown: (table, options) => (options.fenced ? 'MD' : 'MD-unfenced'),
+    replaceInCodeBlock: (codeBlock, range, text) => replaced.push({ codeBlock, selected: range.toString(), text }),
     insert: (el, text) => {
       const selection = document.getSelection();
-      inserted.push({ id: el.id, text, caret: selection.rangeCount > 0 ? selection.getRangeAt(0).startOffset : null });
+      const caret = selection.rangeCount > 0 ? selection.getRangeAt(0).startOffset : null;
+      const record = { id: el.id, text, caret };
+      if (selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed) {
+        record.selected = selection.toString();
+      }
+      inserted.push(record);
     },
   });
   launcher.start();
@@ -42,7 +50,7 @@ function setup({ editorResult = tableModel.createTable(2, 2) } = {}) {
   const shortcut = (target, init = {}) => target.dispatchEvent(new window.KeyboardEvent('keydown', {
     bubbles: true, cancelable: true, code: 'KeyT', key: 'T', altKey: true, shiftKey: true, ...init,
   }));
-  return { window, document, composer, launcher, inserted, opened, placeCaret, shortcut };
+  return { window, document, composer, launcher, inserted, replaced, opened, placeCaret, shortcut };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -125,4 +133,71 @@ test('still sees the shortcut when the page stops keydown propagation at window 
   await tick();
 
   assert.equal(opened.length, 1);
+});
+
+function locateFirstWord(existing, codeBlock) {
+  let located = null;
+  const locateTable = (composer, caret) => {
+    located = caret.startOffset;
+    const range = composer.ownerDocument.createRange();
+    range.setStart(composer.firstChild, 1);
+    range.setEnd(composer.firstChild, 4);
+    return { initial: existing, range, codeBlock };
+  };
+  return { locateTable, located: () => located };
+}
+
+test('with the caret on a table in a code block, edits it and rewrites the code block lines', async () => {
+  const existing = tableModel.fromParsed({ header: ['a'], rows: [['1']], align: [null] });
+  const codeBlock = { id: 'block' };
+  const locate = locateFirstWord(existing, codeBlock);
+  const env = setup({ locateTable: locate.locateTable });
+  env.placeCaret(2);
+
+  env.shortcut(env.composer);
+  await tick();
+
+  assert.equal(locate.located(), 2);
+  assert.equal(env.opened[0].initial, existing);
+  assert.deepEqual(env.opened[0].options, { mode: 'edit' });
+  // Chat's code block already acts as the fence; a second ``` would nest.
+  assert.deepEqual(env.replaced, [{ codeBlock, selected: 'ell', text: 'MD-unfenced' }]);
+  assert.deepEqual(env.inserted, []);
+});
+
+test('a plain-text table (no code block) is replaced by inserting a fenced table over it', async () => {
+  const existing = tableModel.fromParsed({ header: ['a'], rows: [['1']], align: [null] });
+  const env = setup({ locateTable: locateFirstWord(existing, null).locateTable });
+  env.placeCaret(2);
+
+  env.shortcut(env.composer);
+  await tick();
+
+  assert.deepEqual(env.inserted, [{ id: 'composer', text: 'MD', caret: 1, selected: 'ell' }]);
+  assert.deepEqual(env.replaced, []);
+});
+
+test('editAt opens the table at a given position without relying on the current selection', async () => {
+  const existing = tableModel.fromParsed({ header: ['a'], rows: [['1']], align: [null] });
+  const codeBlock = { id: 'block' };
+  const locate = locateFirstWord(existing, codeBlock);
+  const env = setup({ locateTable: locate.locateTable });
+  const position = env.document.createRange();
+  position.setStart(env.composer.firstChild, 3);
+
+  await env.launcher.editAt(env.composer, position);
+
+  assert.equal(locate.located(), 3);
+  assert.equal(env.replaced.length, 1);
+});
+
+test('without an existing table, opens in insert mode and writes a fenced table', async () => {
+  const env = setup({ locateTable: () => null });
+  env.placeCaret(1);
+
+  env.shortcut(env.composer);
+  await tick();
+
+  assert.deepEqual(env.opened[0].options, { mode: 'insert' });
+  assert.equal(env.inserted[0].text, 'MD');
 });

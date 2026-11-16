@@ -40,8 +40,15 @@
     .hint { color: var(--muted); font-size: 12px; }
   `;
 
-  function createTableEditor({ doc, tableModel }) {
-    function open(initial) {
+  const MODE_LABELS = {
+    insert: { title: '插入表格', submit: '插入' },
+    edit: { title: '編輯表格', submit: '更新' },
+  };
+
+  /** parseGrid turns pasted clipboard text into rows of cells (spreadsheet TSV). */
+  function createTableEditor({ doc, tableModel, parseGrid }) {
+    function open(initial, { mode = 'insert' } = {}) {
+      const labels = MODE_LABELS[mode];
       return new Promise((resolve) => {
         let table = initial;
         const host = doc.createElement('div');
@@ -127,15 +134,18 @@
 
         const gridScroll = element('div', { className: 'grid-scroll' });
         const panel = element('div', { className: 'panel' }, [
-          element('h2', { textContent: '插入表格' }),
+          element('h2', { textContent: labels.title }),
           gridScroll,
           element('div', { className: 'actions' }, [
             actionButton('add-row', '+ 列'),
             actionButton('add-column', '+ 欄'),
             element('span', { className: 'spacer' }),
-            element('span', { className: 'hint', textContent: '方向鍵 / Tab 切換儲存格 · ⌘/Ctrl+Enter 插入 · Esc 取消' }),
+            element('span', {
+              className: 'hint',
+              textContent: `方向鍵 / Tab 移動 · 可直接貼上 Excel / Google 試算表 · ⌘/Ctrl+Enter ${labels.submit} · Esc 取消`,
+            }),
             actionButton('cancel', '取消'),
-            actionButton('submit', '插入', { className: 'primary' }),
+            actionButton('submit', labels.submit, { className: 'primary' }),
           ]),
         ]);
         const backdrop = element('div', { className: 'backdrop' }, [panel]);
@@ -175,6 +185,21 @@
           target.focus();
           const caret = event.key === 'ArrowRight' ? 0 : target.value.length;
           target.setSelectionRange(caret, caret);
+        });
+        // A copied block of cells fills from the focused cell; a single value is a normal text paste.
+        shadow.addEventListener('paste', (event) => {
+          const input = event.target;
+          if (!input.matches('input.cell') || event.clipboardData === null) {
+            return;
+          }
+          const block = parseGrid(event.clipboardData.getData('text/plain'));
+          if (block.length <= 1 && (block[0]?.length ?? 0) <= 1) {
+            return;
+          }
+          event.preventDefault();
+          const position = { row: Number(input.dataset.row), column: Number(input.dataset.column) };
+          table = tableModel.pasteBlock(table, position.row, position.column, block);
+          render(position);
         });
         shadow.addEventListener('input', (event) => {
           const { row, column } = event.target.dataset;

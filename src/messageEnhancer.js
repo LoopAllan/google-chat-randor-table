@@ -22,6 +22,8 @@
   const EXCLUDED_SELECTOR = [
     `.${WRAPPER_CLASS}`,
     `[${CONTAINER_ATTRIBUTE}]`,
+    // The composer preview layer (composerPreview.js) renders its own tables.
+    '.mdtable-composer-layer',
     '[contenteditable]:not([contenteditable="false"])',
     'textarea',
     'script',

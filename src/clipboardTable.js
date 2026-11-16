@@ -78,7 +78,12 @@
     return rows.map((row) => [...row, ...Array(width - row.length).fill('')]);
   }
 
-  const api = { tableFromClipboard };
+  /** Any copied block of cells (no HTML or size requirements), for pasting into the editor grid. */
+  function parseClipboardGrid(text) {
+    return parseTsv(text);
+  }
+
+  const api = { tableFromClipboard, parseClipboardGrid };
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
   } else {

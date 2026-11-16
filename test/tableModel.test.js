@@ -71,3 +71,33 @@ test('builds a model from a parsed markdown table', () => {
   assert.deepEqual(table.cells, [['a', 'b'], ['1', '2']]);
   assert.deepEqual(table.align, ['right', null]);
 });
+
+test('a parsed table with rows wider than its header grows instead of dropping cells', () => {
+  const table = model.fromParsed({
+    header: ['a', 'b'], align: ['right', null], rows: [['1', ''], ['1', '2']], sourceRows: [['1'], ['1', '2', '3']],
+  });
+
+  assert.deepEqual(table.cells, [['a', 'b', ''], ['1', '', ''], ['1', '2', '3']]);
+  assert.deepEqual(table.align, ['right', null, null]);
+});
+
+test('pastes a block starting at a cell, growing the table as needed', () => {
+  const table = model.setCell(model.createTable(2, 2), 0, 0, 'keep');
+
+  const next = model.pasteBlock(table, 1, 1, [['a', 'b', 'c'], ['d']]);
+
+  assert.deepEqual(next.cells, [
+    ['keep', '', '', ''],
+    ['', 'a', 'b', 'c'],
+    ['', 'd', '', ''],
+  ]);
+  assert.equal(next.align.length, 4);
+});
+
+test('pasting inside the table only overwrites the covered cells', () => {
+  const table = model.fromParsed({ header: ['h1', 'h2'], rows: [['1', '2'], ['3', '4']], align: [null, null] });
+
+  const next = model.pasteBlock(table, 1, 0, [['x']]);
+
+  assert.deepEqual(next.cells, [['h1', 'h2'], ['x', '2'], ['3', '4']]);
+});

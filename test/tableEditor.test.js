@@ -4,14 +4,15 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const { createTableEditor } = require('../src/tableEditor.js');
+const { parseClipboardGrid } = require('../src/clipboardTable.js');
 const tableModel = require('../src/tableModel.js');
 
 function setup() {
   const { window } = new JSDOM('<!doctype html><body></body>');
   const { document } = window;
   const results = [];
-  const editor = createTableEditor({ doc: document, tableModel });
-  const open = (initial = tableModel.createTable(2, 2)) => editor.open(initial).then(
+  const editor = createTableEditor({ doc: document, tableModel, parseGrid: parseClipboardGrid });
+  const open = (initial = tableModel.createTable(2, 2), options) => editor.open(initial, options).then(
     (value) => results.push(value),
   );
   const shadow = () => document.querySelector('.mdtable-editor-host')?.shadowRoot ?? null;
@@ -22,7 +23,13 @@ function setup() {
     input.value = value;
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   };
-  return { document, open, results, shadow, inputs, button, key, type };
+  const paste = (target, text) => {
+    const event = new window.Event('paste', { bubbles: true, cancelable: true, composed: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: (kind) => (kind === 'text/plain' ? text : '') } });
+    target.dispatchEvent(event);
+    return event;
+  };
+  return { document, open, results, shadow, inputs, button, key, type, paste };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -180,4 +187,33 @@ test('arrows used to pick IME candidates do not move cells', () => {
   key(inputs()[0], { key: 'ArrowDown', isComposing: true });
 
   assert.deepEqual(focusedCell(shadow()), [0, 0]);
+});
+
+test('pasting spreadsheet cells fills from the focused cell and grows the table', async () => {
+  const { open, inputs, paste, button, results } = setup();
+  open(tableModel.createTable(2, 2));
+
+  const event = paste(inputs()[3], 'a\tb\nc\td');
+  button('submit').click();
+  await tick();
+
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(results[0].cells, [['', '', ''], ['', 'a', 'b'], ['', 'c', 'd']]);
+});
+
+test('pasting a single value is left to the input', () => {
+  const { open, inputs, paste } = setup();
+  open();
+
+  assert.equal(paste(inputs()[0], 'plain').defaultPrevented, false);
+});
+
+test('edit mode changes the title and the submit label', () => {
+  const { open, shadow, button } = setup();
+
+  open(tableModel.createTable(2, 2), { mode: 'edit' });
+
+  assert.equal(shadow().querySelector('h2').textContent, '編輯表格');
+  assert.equal(button('submit').textContent, '更新');
+  assert.match(shadow().querySelector('.hint').textContent, /試算表/);
 });

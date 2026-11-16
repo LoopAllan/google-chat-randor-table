@@ -11,6 +11,7 @@ test('parses a basic table with header, delimiter and body rows', () => {
     header: ['Name', 'Age'],
     align: [null, null],
     rows: [['Amy', '30'], ['Bob', '25']],
+    sourceRows: [['Amy', '30'], ['Bob', '25']],
     start: 0,
     end: text.length,
   }]);
@@ -47,6 +48,12 @@ test('pads short rows and truncates long rows to the header width', () => {
   const [table] = findTables('| a | b |\n| - | - |\n| 1 |\n| 1 | 2 | 3 |');
 
   assert.deepEqual(table.rows, [['1', ''], ['1', '2']]);
+});
+
+test('keeps the cells as written in sourceRows so an editor does not lose extra cells', () => {
+  const [table] = findTables('| a | b |\n| - | - |\n| 1 |\n| 1 | 2 | 3 |');
+
+  assert.deepEqual(table.sourceRows, [['1'], ['1', '2', '3']]);
 });
 
 test('ends the table at the first line without a pipe', () => {

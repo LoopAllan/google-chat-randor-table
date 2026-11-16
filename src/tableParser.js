@@ -67,13 +67,16 @@
       return null;
     }
 
-    const rows = [];
+    // GFM drops cells beyond the header width when rendering; sourceRows keeps
+    // them so an editor writing the table back does not lose data.
+    const sourceRows = [];
     let next = index + 2;
     while (next < lines.length && isRowLike(lines[next])) {
-      rows.push(fitToWidth(splitRow(lines[next]), header.length));
+      sourceRows.push(splitRow(lines[next]));
       next += 1;
     }
-    return { table: { header, align, rows }, nextIndex: next };
+    const rows = sourceRows.map((cells) => fitToWidth(cells, header.length));
+    return { table: { header, align, rows, sourceRows }, nextIndex: next };
   }
 
   /**

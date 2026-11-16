@@ -40,3 +40,11 @@ test('ignores a single cell, a single row or a single column', () => {
   assert.equal(tableFromClipboard({ html: HTML_TABLE, text: 'a\tb\tc' }), null);
   assert.equal(tableFromClipboard({ html: HTML_TABLE, text: 'a\nb\nc' }), null);
 });
+
+const { parseClipboardGrid } = require('../src/clipboardTable.js');
+
+test('parseClipboardGrid reads any TSV block, even without HTML or a header', () => {
+  assert.deepEqual(parseClipboardGrid('a\tb\r\nc\td\r\n'), [['a', 'b'], ['c', 'd']]);
+  assert.deepEqual(parseClipboardGrid('single'), [['single']]);
+  assert.deepEqual(parseClipboardGrid('"x\ny"\tz'), [['x\ny', 'z']]);
+});

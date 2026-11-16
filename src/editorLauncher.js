@@ -17,7 +17,14 @@
    * eventTarget should be window: its capture phase runs before the page's
    * document-level handlers, which may stop keydown / contextmenu propagation.
    */
-  function createEditorLauncher({ doc, eventTarget = doc, createInitialTable, openEditor, toMarkdown, insert }) {
+  /**
+   * locateTable(composer, caretRange) returns the table under the caret ({ initial, range, codeBlock })
+   * or null; when found, the editor opens in edit mode and its result replaces that range:
+   * inside a code block through replaceInCodeBlock, otherwise by inserting over the selected text.
+   */
+  function createEditorLauncher({
+    doc, eventTarget = doc, createInitialTable, openEditor, toMarkdown, insert, replaceInCodeBlock, locateTable = () => null,
+  }) {
     let contextMenuTarget = null;
 
     function editableFrom(target) {
@@ -43,14 +50,25 @@
       selection.addRange(range);
     }
 
-    async function openFor(composer) {
-      const caret = saveCaret(composer);
-      const table = await openEditor(createInitialTable());
-      restoreCaret(composer, caret);
-      if (table !== null) {
-        insert(composer, toMarkdown(table));
+    /** Opens the editor for the table at position (a collapsed range in composer), or a new table. */
+    async function editAt(composer, position) {
+      const existing = position === null ? null : locateTable(composer, position);
+      const table = await openEditor(existing?.initial ?? createInitialTable(), { mode: existing === null ? 'insert' : 'edit' });
+      if (table === null) {
+        restoreCaret(composer, position);
+        return;
       }
+      if (existing !== null && existing.codeBlock !== null) {
+        // Chat's code block already acts as the fence; a second ``` would nest.
+        replaceInCodeBlock(existing.codeBlock, existing.range, toMarkdown(table, { fenced: false }));
+        return;
+      }
+      // Selecting the old table text makes the insert replace it.
+      restoreCaret(composer, existing?.range ?? position);
+      insert(composer, toMarkdown(table, { fenced: true }));
     }
+
+    const openFor = (composer) => editAt(composer, saveCaret(composer));
 
     function onKeydown(event) {
       if (!isShortcut(event)) {
@@ -90,6 +108,7 @@
         eventTarget.removeEventListener('contextmenu', onContextMenu, true);
       },
       openFromContextMenu,
+      editAt,
     };
   }
 

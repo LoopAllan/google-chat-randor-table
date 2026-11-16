@@ -26,7 +26,15 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 
 **從 Excel / Google 試算表貼上**：在 Chat 輸入框貼上兩列兩欄以上的儲存格，會自動轉成包在 ``` 裡的 markdown table（第一列當表頭）。只在 chat.google.com 的輸入框作用，Gmail 寫信不受影響。
 
-**表格編輯器**：在 Chat 輸入框按右鍵選「插入 Markdown 表格」，或按 `Option+Shift+T`（Windows：`Alt+Shift+T`），會跳出表格編輯器，可新增/刪除列與欄、設定每欄對齊；按「插入」（或 `⌘/Ctrl+Enter`）就會在游標位置插入 markdown table。
+**表格編輯器**：在 Chat 輸入框按右鍵選「插入 Markdown 表格」，或按 `Option+Shift+T`（Windows：`Alt+Shift+T`）。
+
+- 游標不在表格上：開一張空白表格，按「插入」寫進游標位置
+- 游標在既有的表格上（包括 Chat 的程式碼區塊）：載入那張表格，按「更新」直接取代
+- 方向鍵 / Tab 在儲存格間移動（← → 只在文字開頭/結尾時換格）
+- 可直接貼上從 Excel / Google 試算表複製的多格內容：從游標所在的格子往右下填入，表格不夠大會自動加列加欄
+- 可新增/刪除列與欄、設定每欄對齊；`⌘/Ctrl+Enter` 送出，`Esc` 取消
+
+**輸入框預覽**：輸入框裡程式碼區塊中的 markdown table 會直接顯示成表格，右上角有「編輯表格」（打開編輯器更新這張表格）和「顯示原文」。送出的內容不變，仍是原本的 markdown。
 
 ## 運作方式
 
@@ -43,6 +51,9 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 | `src/pasteConverter.js` | 攔截輸入框的試算表貼上，換成 markdown table |
 | `src/tableModel.js` | 純函式：編輯中的表格（新增/刪除列欄、對齊），不可變 |
 | `src/tableEditor.js` | 表格編輯器 UI（Shadow DOM，跟 Chat 的樣式隔離） |
+| `src/composerTableLocator.js` | 找出輸入框游標所在的表格，並建立涵蓋它的 DOM Range 以便取代 |
+| `src/codeBlockWriter.js` | 直接改寫 Chat 程式碼區塊裡表格那幾行（選取後貼上會破壞程式碼區塊） |
+| `src/composerPreview.js` | 輸入框預覽：在程式碼區塊上疊一層表格（在可編輯區外），滾動交回輸入框、點擊把游標放到表格後 |
 | `src/editorLauncher.js` | 快捷鍵 / 右鍵選單開啟編輯器，保存並還原游標位置後插入 |
 | `src/background.js` | Service worker：建立右鍵選單，轉送到被點的 frame |
 | `src/contentScript.js` | 入口，把以上模組接上真實頁面 |

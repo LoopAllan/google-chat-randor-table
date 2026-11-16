@@ -63,3 +63,76 @@ table.mdtable tbody tr:nth-child(even) td {
   opacity: 1;
   text-decoration: underline;
 }
+
+/*
+ * Composer preview: Chat's code block keeps the markdown (that is what gets sent)
+ * but its text is made transparent and its height follows the rendered table
+ * laid over it from .mdtable-composer-layer (outside the editable area).
+ */
+[data-mdtable-preview="table"],
+[data-mdtable-preview="table"] * {
+  color: transparent !important;
+  caret-color: transparent !important;
+}
+
+/* Its min-height comes from a <style> composerPreview.js keeps per code block. */
+[data-mdtable-preview="table"] {
+  box-sizing: border-box !important;
+}
+
+.mdtable-composer-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.mdtable-composer-preview {
+  position: fixed;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: text;
+}
+
+/* Source view: the markdown underneath is the real, editable text; only the toolbar takes clicks. */
+.mdtable-composer-preview[data-mdtable-state="source"] {
+  pointer-events: none;
+}
+
+.mdtable-composer-preview[data-mdtable-state="source"] .mdtable-composer-item {
+  display: none;
+}
+
+.mdtable-composer-item {
+  margin-bottom: 4px;
+}
+
+/* Sticks to the top of the visible part (top is set by composerPreview.js), so long tables keep it reachable. */
+.mdtable-composer-toolbar {
+  position: absolute;
+  right: 6px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: 14px;
+  background: var(--mdtable-block-background, transparent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.mdtable-composer-edit {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 12px;
+  background: none;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mdtable-composer-edit:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}

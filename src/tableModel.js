@@ -16,8 +16,11 @@
     };
   }
 
-  function fromParsed({ header, rows, align }) {
-    return { cells: [[...header], ...rows.map((row) => [...row])], align: [...align] };
+  /** Uses sourceRows (cells as written) when present, widening the table to the widest row. */
+  function fromParsed({ header, rows, align, sourceRows = rows }) {
+    const width = Math.max(header.length, ...sourceRows.map((row) => row.length));
+    const pad = (list, filler) => [...list, ...Array(width - list.length).fill(filler)];
+    return { cells: [pad(header, ''), ...sourceRows.map((row) => pad(row, ''))], align: pad(align, null) };
   }
 
   function setCell(table, row, column, value) {
@@ -61,7 +64,24 @@
     return { ...table, align };
   }
 
-  const api = { createTable, fromParsed, setCell, insertRow, removeRow, insertColumn, removeColumn, cycleAlign };
+  /** Writes block (rows of cells) starting at [row, column], adding rows/columns when it overflows. */
+  function pasteBlock(table, row, column, block) {
+    const width = Math.max(...block.map((cells) => cells.length));
+    let grown = table;
+    while (grown.cells.length < row + block.length) {
+      grown = insertRow(grown, grown.cells.length);
+    }
+    while (grown.align.length < column + width) {
+      grown = insertColumn(grown, grown.align.length);
+    }
+    const cells = grown.cells.map((cellsOfRow) => [...cellsOfRow]);
+    block.forEach((values, rowOffset) => values.forEach((value, columnOffset) => {
+      cells[row + rowOffset][column + columnOffset] = value;
+    }));
+    return { ...grown, cells };
+  }
+
+  const api = { createTable, fromParsed, setCell, insertRow, removeRow, insertColumn, removeColumn, cycleAlign, pasteBlock };
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
   } else {
