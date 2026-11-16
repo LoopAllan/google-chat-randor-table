@@ -6,7 +6,8 @@
  * edited table, or null when cancelled.
  */
 (function (root) {
-  const ALIGN_LABELS = { null: '預設', left: '靠左', center: '置中', right: '靠右' };
+  // Unset columns render left-aligned, so they are labelled 靠左 rather than a separate 預設.
+  const ALIGN_LABELS = { null: '靠左', left: '靠左', center: '置中', right: '靠右' };
   const ARROW_STEPS = {
     ArrowUp: { row: -1, column: 0 },
     ArrowDown: { row: 1, column: 0 },

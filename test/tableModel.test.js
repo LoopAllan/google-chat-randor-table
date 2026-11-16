@@ -41,7 +41,7 @@ test('inserts and removes columns together with their alignment', () => {
   const table = model.cycleAlign(model.createTable(2, 2), 1);
 
   const added = model.insertColumn(table, 1);
-  assert.deepEqual(added.align, [null, null, 'left']);
+  assert.deepEqual(added.align, [null, null, 'center']);
   assert.equal(added.cells[0].length, 3);
 
   const removed = model.removeColumn(added, 2);
@@ -54,15 +54,16 @@ test('keeps at least one column', () => {
   assert.equal(model.removeColumn(table, 0), table);
 });
 
-test('cycles alignment none → left → center → right → none', () => {
+test('cycles alignment left → center → right → left; unset already renders left, so it is the left step', () => {
   let table = model.createTable(2, 1);
   const seen = [];
-  for (let step = 0; step < 4; step += 1) {
+  for (let step = 0; step < 3; step += 1) {
     table = model.cycleAlign(table, 0);
     seen.push(table.align[0]);
   }
 
-  assert.deepEqual(seen, ['left', 'center', 'right', null]);
+  assert.deepEqual(seen, ['center', 'right', null]);
+  assert.equal(model.cycleAlign({ cells: [['a']], align: ['left'] }, 0).align[0], 'center', 'an explicit :-- is the left step too');
 });
 
 test('builds a model from a parsed markdown table', () => {

@@ -29,6 +29,9 @@
     'script',
     'style',
   ].join(',');
+  const CODE_BLOCK_SELECTOR = '[role="code"], pre';
+  // Chat's tool bar next to a sent code block (word-wrap toggle), verified 2026-11-16.
+  const CODE_BLOCK_TOOLS_SELECTOR = '[exclude-from-clipboard]';
   const LABEL_SHOW_SOURCE = '顯示原文';
   const LABEL_SHOW_TABLE = '顯示表格';
 
@@ -140,6 +143,17 @@
       return { hidden, spans };
     }
 
+    /**
+     * A code block hidden as a whole becomes the table, so its tool bar (word wrap)
+     * would act on nothing visible; it is hidden and shown together with the source.
+     */
+    function codeBlockToolsOf(hidden) {
+      return hidden
+        .filter((element) => element.matches(CODE_BLOCK_SELECTOR))
+        .flatMap((block) => [...block.parentElement.children]
+          .filter((sibling) => sibling !== block && sibling.matches(CODE_BLOCK_TOOLS_SELECTOR)));
+    }
+
     // ---- rendering -----------------------------------------------------------
 
     function setGroupState(group, state) {
@@ -166,6 +180,7 @@
       const { hidden, spans } = toHideableElements(topmostNodesIn(container, rangeLeaves));
       const wrapper = createWrapper(range.table);
       hidden[0].parentNode.insertBefore(wrapper, hidden[0]);
+      hidden.push(...codeBlockToolsOf(hidden));
 
       const group = { wrapper, hidden, spans };
       wrapper.querySelector('.mdtable-toggle').addEventListener('click', (event) => {

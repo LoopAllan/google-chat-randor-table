@@ -7,7 +7,8 @@
 (function (root) {
   const MIN_ROWS = 2;
   const MIN_COLUMNS = 1;
-  const ALIGN_CYCLE = [null, 'left', 'center', 'right'];
+  // Unset columns render left-aligned, so unset is the "left" step; an explicit :-- counts as it too.
+  const ALIGN_CYCLE = [null, 'center', 'right'];
 
   function createTable(rowCount, columnCount) {
     return {
@@ -60,7 +61,8 @@
 
   function cycleAlign(table, column) {
     const align = [...table.align];
-    align[column] = ALIGN_CYCLE[(ALIGN_CYCLE.indexOf(align[column]) + 1) % ALIGN_CYCLE.length];
+    const current = align[column] === 'left' ? null : align[column];
+    align[column] = ALIGN_CYCLE[(ALIGN_CYCLE.indexOf(current) + 1) % ALIGN_CYCLE.length];
     return { ...table, align };
   }
 

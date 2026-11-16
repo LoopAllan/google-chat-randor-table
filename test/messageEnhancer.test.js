@@ -195,3 +195,31 @@ test('isOwnNode recognises nodes the enhancer inserted', () => {
   assert.equal(enhancer.isOwnNode(document.querySelector('table.mdtable td')), true);
   assert.equal(enhancer.isOwnNode(document.getElementById('msg')), false);
 });
+
+// Sent-message shape from real Chat (2026-11-16): the code block's tool bar (with the
+// word-wrap toggle) is a sibling marked exclude-from-clipboard.
+const CODE_BLOCK_MESSAGE = '<div id="msg"><article role="code" id="code"><div>| a | b |</div><div>| --- | --- |</div><div>| 1 | 2 |</div></article>'
+  + '<div id="tools" exclude-from-clipboard="true"><button aria-label="切換自動換行">wrap</button></div></div>';
+
+test('hides the code block tool bar (word-wrap toggle) while a code block is shown as a table', () => {
+  const { document, enhancer } = setup(CODE_BLOCK_MESSAGE);
+
+  enhancer.scan(document.body);
+  const tools = document.getElementById('tools');
+  assert.equal(tools.getAttribute('data-mdtable-hidden'), 'table');
+
+  document.querySelector('.mdtable-toggle').click();
+  assert.equal(tools.getAttribute('data-mdtable-hidden'), 'source', 'the source view gets the tool bar back');
+
+  enhancer.releaseWithin(document.body);
+  assert.equal(tools.hasAttribute('data-mdtable-hidden'), false);
+});
+
+test('keeps the tool bar when the code block holds more than the table', () => {
+  const { document, enhancer } = setup('<div id="msg"><article role="code"><div>npm test</div><div>| a | b |</div><div>| --- | --- |</div>'
+    + '<div>| 1 | 2 |</div></article><div id="tools" exclude-from-clipboard="true"><button>wrap</button></div></div>');
+
+  enhancer.scan(document.body);
+
+  assert.equal(document.getElementById('tools').hasAttribute('data-mdtable-hidden'), false);
+});

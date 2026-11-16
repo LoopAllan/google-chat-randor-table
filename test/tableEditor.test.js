@@ -113,13 +113,13 @@ test('removes a body row and a column', async () => {
   assert.deepEqual(results[0].cells, [['b'], ['4']]);
 });
 
-test('alignment button cycles and shows the current alignment', () => {
+test('alignment button shows 靠左 for an unset column (no separate 預設) and cycles from there', () => {
   const { open, button } = setup();
   open();
 
-  button('align', 1).click();
-
   assert.equal(button('align', 1).textContent, '靠左');
+  button('align', 1).click();
+  assert.equal(button('align', 1).textContent, '置中');
 });
 
 test('keystrokes inside the editor do not reach the page', () => {
