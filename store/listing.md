@@ -6,7 +6,7 @@
 |---|---|
 | 上傳的套件 | `dist/google-chat-markdown-table.zip`（`npm run package` 產生） |
 | 商店 icon 128×128 | `icons/icon128.png` |
-| 截圖 1280×800 | `store/screenshot-1280x800.png`（由 `store/screenshot.html` 產生） |
+| 截圖 1280×800 | `store/screenshot-1280x800.png`（由 `store/screenshot.html` 產生）、`store/screenshot-editing-1280x800.png`（由 `store/screenshot-editing.html` 產生） |
 | 隱私權政策 | `PRIVACY.md`（需要可公開存取的網址） |
 
 ## Store listing
@@ -14,7 +14,7 @@
 **Name**：Google Chat Markdown Table
 
 **Summary（≤132 字元）**：
-Read and write markdown tables in Google Chat: messages show real tables, and pasted or edited tables become markdown.
+Read and write markdown tables in Google Chat: messages show real tables; paste, edit or type tables right in the message box.
 
 **Category**：Productivity → Communication
 
@@ -38,6 +38,12 @@ WRITE
 • Paste a table from Google Sheets, Excel, Notion, Google Docs, Confluence or a web page into the message box and it becomes a markdown table, with bold, links, lists and line breaks kept
 • Table editor: right-click the message box and choose "插入 Markdown 表格" (Insert Markdown table), or press Option+Shift+T (Alt+Shift+T on Windows). Move between cells with the arrow keys or Tab, paste blocks of cells, add or remove rows and columns, set column alignment
 • A table you are writing is previewed as a real table in the message box; click "編輯表格" (Edit table) to change it in the editor
+
+EDIT IN THE MESSAGE BOX
+• Click any cell of the previewed table and type; the markdown that gets sent is updated as you go
+• Markdown applies as you type: **bold**, *italic*, ~~strikethrough~~, `code` and [links](https://…) turn into formatting once closed
+• Move like a spreadsheet: arrow keys, Tab and Enter move between cells; ↑ / ↓ on the lines above or below the table step into it and back out
+• Shift+Enter adds a line break in a cell, Esc returns to the message box, ⌘/Ctrl+Enter sends the message
 
 Works in chat.google.com and Chat inside Gmail, in light and dark themes. The interface is in Traditional Chinese.
 

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>Store screenshot: editing in the message box</title>
+  <link rel="stylesheet" href="../styles/mdtable.css">
+  <style>
+    body { margin: 0; width: 1280px; height: 800px; background: #1f1f1f; color: #e3e3e3; font: 15px/1.5 system-ui, sans-serif;
+      display: flex; gap: 48px; padding: 56px; box-sizing: border-box; }
+    .intro { width: 400px; flex: none; align-self: center; }
+    h2 { font-size: 26px; line-height: 1.3; margin: 0 0 24px; color: #fff; }
+    ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 18px; }
+    li { padding-left: 18px; border-left: 3px solid #8ab4f8; }
+    li b { color: #fff; }
+    kbd { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 6px; border-radius: 4px; border: 1px solid #5f6368; background: #2a2b2e; }
+    code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: #c6dafc; }
+    .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+    .label { font-size: 13px; color: #9aa0a6; }
+    .composer { background: #303134; border-radius: 20px; padding: 18px 22px; font-size: 18px; }
+    .sent { margin: 0; padding: 14px 18px; border-radius: 12px; background: #2a2b2e; color: #bdc1c6; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow: hidden; }
+    .block { position: relative; margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: #26272a; }
+    /* The real toolbar is placed by composerPreview.js; here it sits in the block's corner. */
+    .block .mdtable-composer-toolbar { top: 0; --mdtable-block-background: #26272a; }
+    .callout { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: #2a2b2e; font-size: 14px; align-self: flex-start; }
+    .callout .arrow { color: #8ab4f8; }
+  </style>
+</head>
+<body>
+  <div class="intro">
+    <h2>Edit tables right in the message box</h2>
+    <ul>
+      <li><b>Click any cell and type.</b> Your change is written back to the markdown that gets sent.</li>
+      <li><b>Markdown applies as you type:</b> <code>**bold**</code> <code>*italic*</code> <code>~~strike~~</code> <code>`code`</code> <code>[link](url)</code></li>
+      <li><b>Move like a spreadsheet:</b> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>Tab</kbd> <kbd>Enter</kbd>. Arrow keys on the lines above or below step in and out of the table.</li>
+      <li><b>Send without leaving the table:</b> <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd></li>
+    </ul>
+  </div>
+
+  <div class="chat">
+    <div class="callout"><code>**緊急**</code><span class="arrow">→</span><strong>緊急</strong><span class="label">converted as you type the closing **</span></div>
+    <div class="label">Message box</div>
+    <div class="composer">
+      <div>這週的進度整理如下：</div>
+      <div class="block" id="block">
+        <div class="mdtable-composer-toolbar"><button class="mdtable-composer-edit" type="button">編輯表格</button><button class="mdtable-toggle" type="button">顯示原文</button></div>
+      </div>
+      <div>有問題再跟我說 🙏</div>
+    </div>
+    <div class="label">What gets sent: still markdown, so everyone can read it</div>
+    <pre class="sent" id="sent"></pre>
+  </div>
+
+  <script src="../src/inlineMarkdown.js"></script>
+  <script src="../src/tableRenderer.js"></script>
+  <script src="../src/markdownShortcuts.js"></script>
+  <script src="../src/htmlTable.js"></script>
+  <script src="../src/cellEditing.js"></script>
+  <script src="../src/tableModel.js"></script>
+  <script src="../src/markdownTableWriter.js"></script>
+  <script>
+    // The table is drawn and made editable by the extension's own modules.
+    const { renderTable, renderInline, applyShortcut, createCellEditing, createHtmlTableReader, tableModel, toMarkdownTable } = MdTable;
+    const parsed = {
+      header: ['項目', '負責人', '狀態'],
+      rows: [
+        ['登入頁改版', 'Amy', '**已上線** *(週二)*'],
+        ['搜尋 API 逾時', 'Ben', '`p99 > 2s`，**緊急**'],
+        ['文件更新', 'Cara', '見 [規格](https://example.com)<br>週五前完成'],
+      ],
+      align: [null, null, null],
+    };
+    const table = renderTable(parsed, document, { renderCell: renderInline });
+    const model = tableModel.fromParsed(parsed);
+    document.getElementById('sent').textContent = toMarkdownTable(model.cells, { align: model.align, fenced: true });
+    document.getElementById('block').prepend(table);
+    const editing = createCellEditing({ doc: document, applyShortcut, renderInline, readCell: createHtmlTableReader({ parseHtml: () => null }).readCell });
+    const handlers = { onChange() {}, onInput() {}, onLeave() {}, onSubmit() {} };
+    editing.attach(table.querySelector('table'), handlers);
+    editing.focusCell(table.querySelectorAll('tbody tr')[1].cells[2]);
+  </script>
+</body>
+</html>

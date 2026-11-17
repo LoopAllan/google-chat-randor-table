@@ -24,9 +24,13 @@
 
   const elementOf = (node) => (node === null || node.nodeType === 1 ? node : node.parentElement);
 
+  /** The editable holding node; our preview layer's editable table cells are not Chat's. */
   function editableAncestor(node) {
     const element = elementOf(node);
-    return element === null ? null : element.closest(EDITABLE);
+    if (element === null || element.closest(`.${PREVIEW_LAYER_CLASS}`) !== null) {
+      return null;
+    }
+    return element.closest(EDITABLE);
   }
 
   /** The code block holding node, only when it lies inside composer. */
@@ -47,9 +51,21 @@
     selection.addRange(range);
   }
 
+  /**
+   * Sends the composer's message the way a user does: Enter in the composer.
+   * Not yet verified against chat.google.com (2026-11-17): if Chat ignores a
+   * synthetic Enter, this is the one place to switch to its send button.
+   */
+  function sendMessage(composer) {
+    const KeyboardEventImpl = composer.ownerDocument.defaultView.KeyboardEvent;
+    composer.dispatchEvent(new KeyboardEventImpl('keydown', {
+      key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true,
+    }));
+  }
+
   const api = {
     EDITABLE, COMPOSER, TYPING_AREA, CODE_BLOCK, COMPOSER_CODE_BLOCK, CODE_BLOCK_TOOLS, PREVIEW_LAYER_CLASS,
-    editableAncestor, codeBlockAncestor, setCaret,
+    editableAncestor, codeBlockAncestor, setCaret, sendMessage,
   };
   if (typeof module === 'object' && module.exports) {
     module.exports = api;

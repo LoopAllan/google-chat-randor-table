@@ -39,18 +39,29 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 
 **輸入框預覽**：輸入框裡程式碼區塊中的 markdown table 會直接顯示成表格，右上角有「編輯表格」（打開編輯器更新這張表格）和「顯示原文」。送出的內容不變，仍是原本的 markdown。
 
+**直接在預覽上改文字**：點預覽表格的儲存格就能直接打字，改動會寫回輸入框裡的 markdown。在輸入框裡，游標在表格正上方那一行按 ↓ 會進入表頭第一格，在正下方那一行按 ↑ 會進入最後一列第一格。
+
+- 打完 markdown 語法會自動套用：`**粗體**`、`*斜體*`、`_斜體_`、`~~刪除線~~`、`` `程式碼` ``、`[文字](https://…)`
+- 方向鍵在格子間移動：↑ ↓ 直接換列，← → 只在文字開頭/結尾時換格；在第一列按 ↑ 會跳到表格上方的輸入框，在最後一列按 ↓ 會跳到表格下方
+- `Tab` / `Shift+Tab` 左右換格，`Enter` 往下一格（最後一列離開表格），`Shift+Enter` 在格子內換行（存成 `<br>`），`Esc` 回到輸入框
+- `⌘/Ctrl+Enter` 先把改動寫回輸入框，再直接送出訊息
+- 貼上只取純文字；中文輸入法選字時不會提前轉換
+- 只改文字；新增/刪除列欄、對齊請用「編輯表格」
+
 ## 運作方式
 
 | 模組 | 職責 |
 |---|---|
-| `src/chatDom.js` | Google Chat DOM 結構的唯一來源（輸入框、程式碼區塊、工具列的選擇器、設定游標）；Chat 改版時只改這裡 |
+| `src/chatDom.js` | Google Chat DOM 結構的唯一來源（輸入框、程式碼區塊、工具列的選擇器、設定游標、送出訊息）；Chat 改版時只改這裡 |
 | `src/tableParser.js` | 純函式：在文字中找出表格與其字元位置（對齊、跳脫 `\|`、補齊欄位數） |
 | `src/textExtractor.js` | 取元素文字並記錄每個 text node / `<br>` 對應的字元範圍（不依賴 layout） |
 | `src/inlineMarkdown.js` | 儲存格內的 markdown（粗體、斜體、刪除線、程式碼、連結、`<br>`）→ DOM，只用 DOM API 建立節點（防 XSS） |
+| `src/markdownShortcuts.js` | 打字時游標前剛完成的 markdown 語法換成格式元素；什麼算完成交給 `inlineMarkdown.js` 判斷 |
+| `src/cellEditing.js` | 預覽儲存格的就地編輯：方向鍵 / Tab / Enter 移動、輸入法、純文字貼上、⌘/Ctrl+Enter 送出，停頓或離開格子時回報該格的 markdown |
 | `src/tableRenderer.js` | 表格 → DOM，儲存格內容交給注入的 `renderCell`（預設純文字） |
 | `src/messageEnhancer.js` | 找出含表格的訊息，**只隱藏表格那幾行的節點**並在原位插入表格；處理編輯和移除 |
 | `src/tableWatcher.js` | MutationObserver 監看新增、編輯、刪除，批次掃描 |
-| `src/htmlTable.js` | 從任何來源的 HTML `<table>` 讀出儲存格，格式轉 markdown、合併儲存格展開 |
+| `src/htmlTable.js` | 從任何來源的 HTML `<table>` 讀出儲存格，格式轉 markdown、合併儲存格展開；`readCell` 也用來把編輯中的預覽儲存格轉回 markdown |
 | `src/clipboardTable.js` | 從剪貼簿讀出表格：markdown 表格文字（Notion 的 HTML 會把清單拆成獨立列，純文字才正確）→ HTML 表格 → TSV |
 | `src/markdownTableWriter.js` | 純函式：rows → markdown table（跳脫 `\|`、換行轉 `<br>`、對齊、可包 ```） |
 | `src/composerInserter.js` | 把文字寫進 Chat 輸入框：模擬貼上，失敗時改用 `insertText` |
@@ -60,7 +71,7 @@ Chrome extension（Manifest V3）：把 Google Chat 訊息泡泡裡的 GFM markd
 | `src/composerTableLocator.js` | 找出輸入框游標所在的表格，並建立涵蓋它的 DOM Range 以便取代 |
 | `src/codeBlockWriter.js` | 直接改寫 Chat 程式碼區塊裡表格那幾行（選取後貼上會破壞程式碼區塊） |
 | `src/overlayGeometry.js` | 純函式：預覽疊在程式碼區塊上的位置、裁切與按鈕列位置 |
-| `src/composerPreview.js` | 輸入框預覽：在程式碼區塊上疊一層表格（在可編輯區外），滾動交回輸入框、點擊把游標放到表格後 |
+| `src/composerPreview.js` | 輸入框預覽：在程式碼區塊上疊一層表格（在可編輯區外），滾動交回輸入框、點儲存格外把游標放到表格後；儲存格改動寫回程式碼區塊且不重建正在編輯的表格；表格上下緊鄰的行按 ↑ ↓ 進入表格 |
 | `src/editorLauncher.js` | 快捷鍵 / 右鍵選單開啟編輯器，保存並還原游標位置後插入 |
 | `src/background.js` | Service worker：建立右鍵選單，轉送到被點的 frame |
 | `src/contentScript.js` | 入口，把以上模組接上真實頁面 |

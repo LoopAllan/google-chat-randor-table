@@ -30,7 +30,8 @@
       chatDom.setCaret(composer, caret);
     }
 
-    function replaceLines(codeBlock, range, markdown) {
+    /** moveCaret false keeps focus where it is: an edited preview cell must not lose it to the composer. */
+    function replaceLines(codeBlock, range, markdown, { moveCaret = true } = {}) {
       const first = lineOf(codeBlock, range.startContainer);
       const last = lineOf(codeBlock, range.endContainer);
       if (first === null || last === null) {
@@ -49,7 +50,9 @@
       covered.forEach((line) => line.remove());
 
       const composer = chatDom.editableAncestor(codeBlock);
-      placeCaretAtEnd(composer, newLines[newLines.length - 1]);
+      if (moveCaret) {
+        placeCaretAtEnd(composer, newLines[newLines.length - 1]);
+      }
       composer.dispatchEvent(new doc.defaultView.InputEvent('input', { bubbles: true, inputType: 'insertReplacementText' }));
     }
 

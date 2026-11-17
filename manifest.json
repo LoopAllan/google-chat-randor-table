@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google Chat Markdown Table",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Render markdown tables inside Google Chat message bubbles.",
   "content_scripts": [
     {
@@ -16,6 +16,8 @@
         "src/tableParser.js",
         "src/textExtractor.js",
         "src/inlineMarkdown.js",
+        "src/markdownShortcuts.js",
+        "src/cellEditing.js",
         "src/tableRenderer.js",
         "src/messageEnhancer.js",
         "src/tableWatcher.js",

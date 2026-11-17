@@ -10,7 +10,7 @@
     createMessageEnhancer, createTableWatcher, findTables, mapText, textLeafAt, renderTable, overlayPlacement,
     createPasteConverter, createClipboardReader, createHtmlTableReader, toMarkdownTable, createComposerInserter, browserStrategies,
     tableModel, createTableEditor, createEditorLauncher, createComposerTableLocator,
-    createCodeBlockWriter, createComposerPreview, renderInline,
+    createCodeBlockWriter, createComposerPreview, renderInline, applyShortcut, createCellEditing,
   } = root.MdTable;
   const renderFormattedTable = (table, doc) => renderTable(table, doc, { renderCell: renderInline });
   // Gmail's own compose window supports real HTML tables, so only Chat frames get composer features.
@@ -22,7 +22,7 @@
     const insert = (composer, text) => inserter.insert(composer, text);
 
     // DOMParser documents are inert: no scripts run and nothing is fetched.
-    const { readHtmlTable } = createHtmlTableReader({ parseHtml: (html) => new DOMParser().parseFromString(html, 'text/html') });
+    const { readHtmlTable, readCell } = createHtmlTableReader({ parseHtml: (html) => new DOMParser().parseFromString(html, 'text/html') });
     const clipboardReader = createClipboardReader({ readHtmlTable, findTables, fromParsed: tableModel.fromParsed });
     const writeTable = (table, { fenced }) => toMarkdownTable(table.cells, { fenced, align: table.align });
 
@@ -54,10 +54,19 @@
         launcher.openFromContextMenu().catch((error) => console.error(error));
       }
     });
-    return launcher;
+
+    const cellEditing = {
+      editing: createCellEditing({ doc: document, applyShortcut, renderInline, readCell }),
+      toCells: tableModel.fromParsed,
+      setCell: tableModel.setCell,
+      toMarkdown: (table) => writeTable(table, { fenced: false }),
+      // Focus stays in the cell being edited.
+      replaceInCodeBlock: (codeBlock, range, markdown) => codeBlockWriter.replaceLines(codeBlock, range, markdown, { moveCaret: false }),
+    };
+    return { launcher, cellEditing };
   }
 
-  function startComposerPreview(launcher) {
+  function startComposerPreview({ launcher, cellEditing }) {
     createComposerPreview({
       doc: document,
       findTables,
@@ -66,6 +75,7 @@
       overlayPlacement,
       renderTable: renderFormattedTable,
       onEdit: (composer, position) => launcher.editAt(composer, position).catch((error) => console.error(error)),
+      cellEditing,
       MutationObserverImpl: MutationObserver,
       ResizeObserverImpl: ResizeObserver,
       schedule: (callback) => requestAnimationFrame(callback),
@@ -83,12 +93,12 @@
   }
 
   const isChat = root.location.hostname === CHAT_HOSTNAME;
-  const launcher = isChat ? startComposerFeatures() : null;
+  const composerFeatures = isChat ? startComposerFeatures() : null;
   // Both need document.body, which does not exist yet at document_start.
   const startBodyFeatures = () => {
     startRenderer();
-    if (launcher !== null) {
-      startComposerPreview(launcher);
+    if (composerFeatures !== null) {
+      startComposerPreview(composerFeatures);
     }
   };
   if (document.readyState === 'loading') {

@@ -8,15 +8,37 @@ const { findTables } = require('../src/tableParser.js');
 const { mapText, textLeafAt } = require('../src/textExtractor.js');
 const { overlayPlacement } = require('../src/overlayGeometry.js');
 const { renderTable } = require('../src/tableRenderer.js');
+const { renderInline } = require('../src/inlineMarkdown.js');
+const { applyShortcut } = require('../src/markdownShortcuts.js');
+const { createCellEditing } = require('../src/cellEditing.js');
+const { createHtmlTableReader } = require('../src/htmlTable.js');
+const { createCodeBlockWriter } = require('../src/codeBlockWriter.js');
+const { toMarkdownTable } = require('../src/markdownTableWriter.js');
+const tableModel = require('../src/tableModel.js');
 
 // Composer shape from real Chat (2026-11-16): <article role="code"> holding one <div> per line.
 const TABLE_LINES = '<div>| 欄位 | 數量 |</div><div>| :-- | --: |</div><div>| api-a | 12 |</div>';
 
-function setup(composerHtml, { delay = (callback) => callback() } = {}) {
+/** The cell editing wiring contentScript.js uses, with reports flushed by focusout only. */
+function cellEditingFor(document) {
+  const writer = createCodeBlockWriter({ doc: document });
+  return {
+    editing: createCellEditing({
+      doc: document, applyShortcut, renderInline, readCell: createHtmlTableReader({ parseHtml: () => null }).readCell, delay: () => {},
+    }),
+    toCells: tableModel.fromParsed,
+    setCell: tableModel.setCell,
+    toMarkdown: (table) => toMarkdownTable(table.cells, { align: table.align }),
+    replaceInCodeBlock: (block, range, markdown) => writer.replaceLines(block, range, markdown, { moveCaret: false }),
+  };
+}
+
+function setup(composerHtml, { delay = (callback) => callback(), editable = false } = {}) {
   const { window } = new JSDOM(`<!doctype html><body><div id="composer" role="textbox" contenteditable="true">${composerHtml}</div></body>`);
   const { document } = window;
   const edits = [];
   const preview = createComposerPreview({
+    cellEditing: editable ? cellEditingFor(document) : null,
     doc: document,
     findTables,
     mapText,
@@ -366,4 +388,242 @@ test('a draft restored into a not-yet-editable composer is previewed once Chat m
 
   assert.equal(previews().length, 1);
   preview.stop();
+});
+
+// ---- editing cells in place ------------------------------------------------------------
+
+const linesOf = (block) => [...block.children].map((line) => line.textContent);
+
+/** Types text at the end of a preview cell and leaves it (jsdom has no editing engine). */
+function editCell(window, document, cell, text) {
+  cell.focus();
+  const node = cell.appendChild(document.createTextNode(text));
+  document.getSelection().collapse(node, node.length);
+  cell.dispatchEvent(new window.InputEvent('input', { bubbles: true }));
+  cell.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true }));
+}
+
+test('an edited cell is written back into the code block as markdown; focus and the preview stay', async () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`, { editable: true });
+  preview.start();
+  const element = previews()[0];
+  const cell = element.querySelectorAll('td')[0];
+
+  editCell(window, document, cell, ' **新**');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(linesOf(composer.querySelector('article')), ['| 欄位 | 數量 |', '| :-- | --: |', '| api-a **新** | 12 |']);
+  assert.equal(document.activeElement, cell, 'typing continues in the cell');
+  assert.equal(previews()[0], element, 'our own write does not rebuild the table being edited');
+  assert.equal(cell.querySelector('strong').textContent, '新');
+});
+
+test('an unchanged cell writes nothing', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`, { editable: true });
+  preview.refresh();
+  const before = composer.innerHTML;
+  const cell = previews()[0].querySelector('th');
+
+  cell.dispatchEvent(new window.InputEvent('input', { bubbles: true }));
+  cell.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true }));
+
+  assert.equal(composer.innerHTML, before);
+});
+
+test('editing the first table keeps the second table\'s position right', () => {
+  const { window, document, composer, preview, previews } = setup(
+    `<article role="code">${TABLE_LINES}<div>note</div><div>| x |</div><div>| - |</div><div>| 1 |</div></article>`, { editable: true },
+  );
+  preview.refresh();
+
+  editCell(window, document, previews()[0].querySelectorAll('td')[0], '-longer');
+  editCell(window, document, previews()[0].querySelectorAll('.mdtable-composer-item')[1].querySelector('td'), '2');
+
+  assert.deepEqual(linesOf(composer.querySelector('article')), [
+    '| 欄位 | 數量 |', '| :-- | --: |', '| api-a-longer | 12 |', 'note', '| x |', '| --- |', '| 12 |',
+  ]);
+});
+
+test('a click in a cell edits it instead of moving the caret to the composer', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article><div>after</div>`, { editable: true });
+  preview.refresh();
+
+  click(window, previews()[0].querySelector('td'));
+
+  assert.notEqual(document.activeElement, composer);
+  assert.equal(previews()[0].querySelector('td').getAttribute('contenteditable'), 'plaintext-only');
+});
+
+test('Escape in a cell hands the caret back to the composer after the code block', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article><div>after</div>`, { editable: true });
+  preview.refresh();
+  const cell = previews()[0].querySelector('td');
+  cell.focus();
+
+  cell.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+  assert.equal(document.activeElement, composer);
+  assert.equal(document.getSelection().getRangeAt(0).startContainer, composer.lastChild.firstChild);
+});
+
+test('when Chat changes the block itself, the rebuilt preview keeps focus in the same cell', () => {
+  const { document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`, { editable: true });
+  preview.refresh();
+  previews()[0].querySelectorAll('td')[1].focus();
+
+  composer.querySelector('article').lastChild.textContent = '| api-b | 99 |';
+  preview.refresh();
+
+  const cell = previews()[0].querySelectorAll('td')[1];
+  assert.equal(cell.textContent, '99');
+  assert.equal(document.activeElement, cell);
+});
+
+test('refuses to write a cell when Chat changed the block since the preview was built (offsets would be stale)', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code"><div>intro</div>${TABLE_LINES}</article>`,
+    { editable: true, delay: () => {} });
+  preview.start();
+  const cell = previews()[0].querySelector('td');
+  composer.querySelector('article').firstChild.textContent = 'a much longer intro';
+  const errors = [];
+  window.addEventListener('error', (event) => { errors.push(event.error.message); event.preventDefault(); });
+  const before = linesOf(composer.querySelector('article'));
+
+  cell.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true }));
+  cell.appendChild(document.createTextNode('!'));
+  cell.dispatchEvent(new window.InputEvent('input', { bubbles: true }));
+  cell.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true }));
+
+  assert.deepEqual(linesOf(composer.querySelector('article')), before);
+  assert.match(errors.join('\n'), /changed since the preview was built/);
+});
+
+const keydown = (window, target, init) => target.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+
+test('ArrowUp on the header row puts the caret at the end of the line before the code block', () => {
+  const { window, document, composer, preview, previews } = setup(`<div>before</div><article role="code">${TABLE_LINES}</article>`, { editable: true });
+  preview.refresh();
+
+  keydown(window, previews()[0].querySelector('th'), { key: 'ArrowUp' });
+
+  const caret = document.getSelection().getRangeAt(0);
+  assert.equal(document.activeElement, composer);
+  assert.equal(caret.startContainer, composer.firstChild.firstChild);
+  assert.equal(caret.startOffset, 'before'.length);
+});
+
+test('ArrowUp with nothing before the code block puts the caret at its start', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article>`, { editable: true });
+  preview.refresh();
+
+  keydown(window, previews()[0].querySelector('th'), { key: 'ArrowUp' });
+
+  const caret = document.getSelection().getRangeAt(0);
+  assert.equal(caret.startContainer, composer.querySelector('article div').firstChild);
+  assert.equal(caret.startOffset, 0);
+});
+
+test('ArrowDown on the last row puts the caret on the line after the code block', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article><div>after</div>`, { editable: true });
+  preview.refresh();
+
+  keydown(window, previews()[0].querySelector('td'), { key: 'ArrowDown' });
+
+  assert.equal(document.getSelection().getRangeAt(0).startContainer, composer.lastChild.firstChild);
+});
+
+test('Cmd/Ctrl+Enter writes the edited cell, then sends from the composer', () => {
+  const { window, document, composer, preview, previews } = setup(`<article role="code">${TABLE_LINES}</article><div>after</div>`, { editable: true });
+  preview.refresh();
+  const sent = [];
+  composer.addEventListener('keydown', (event) => sent.push({ key: event.key, text: composer.querySelector('article').lastChild.textContent }));
+  const cell = previews()[0].querySelector('td');
+  cell.focus();
+  const node = cell.appendChild(document.createTextNode('!'));
+  document.getSelection().collapse(node, 1);
+  cell.dispatchEvent(new window.InputEvent('input', { bubbles: true }));
+
+  keydown(window, cell, { key: 'Enter', ctrlKey: true });
+
+  assert.deepEqual(sent, [{ key: 'Enter', text: '| api-a! | 12 |' }], 'the composer holds the edit when the message is sent');
+  assert.equal(document.activeElement, composer);
+});
+
+// ---- entering the table from the composer with ↑ / ↓ -----------------------------------
+
+/** A preview started on composerHtml, with the caret put in the text node found by caretText. */
+function caretSetup(composerHtml, caretText, offset, { caretRect = null, blockRect = null } = {}) {
+  const context = setup(composerHtml, { editable: true });
+  const { window, document, composer, preview } = context;
+  // jsdom has no layout; Chrome gives the caret's line box.
+  window.Range.prototype.getBoundingClientRect = () => caretRect ?? { top: 0, bottom: 0, height: 0 };
+  if (blockRect !== null) {
+    composer.querySelector('article').getBoundingClientRect = () => blockRect;
+  }
+  preview.start();
+  const walker = document.createTreeWalker(composer, 4);
+  while (walker.nextNode() && walker.currentNode.data !== caretText);
+  composer.focus();
+  document.getSelection().collapse(walker.currentNode, offset);
+  return context;
+}
+
+const arrow = (window, composer, key, init = {}) => {
+  const event = new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+  composer.dispatchEvent(event);
+  return event;
+};
+
+test('ArrowDown on the line right above the table enters its first header cell', () => {
+  const { window, document, composer, previews } = caretSetup(`<div>before</div><article role="code">${TABLE_LINES}</article>`, 'before', 2);
+
+  const event = arrow(window, composer, 'ArrowDown');
+
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(document.activeElement, previews()[0].querySelector('th'));
+});
+
+test('ArrowDown also enters when lines are text and <br> directly in the composer', () => {
+  const { window, document, composer, previews } = caretSetup(`before<br><article role="code">${TABLE_LINES}</article>`, 'before', 6);
+
+  arrow(window, composer, 'ArrowDown');
+
+  assert.equal(document.activeElement, previews()[0].querySelector('th'));
+});
+
+test('ArrowUp on the line right below the table enters the first cell of its last row', () => {
+  const { window, document, composer, previews } = caretSetup(`<article role="code">${TABLE_LINES}</article><div>after</div>`, 'after', 3);
+
+  arrow(window, composer, 'ArrowUp');
+
+  const cells = previews()[0].querySelectorAll('tr');
+  assert.equal(document.activeElement, cells[cells.length - 1].cells[0]);
+});
+
+test('arrows further away from the table, or pointing away from it, are left to Chat', () => {
+  const html = `<div>l1</div><div>l2</div><article role="code">${TABLE_LINES}</article><div>after</div>`;
+  const { window, document, composer } = caretSetup(html, 'l1', 1);
+
+  assert.equal(arrow(window, composer, 'ArrowDown').defaultPrevented, false, 'a line in between');
+  document.getSelection().collapse(composer.lastChild.firstChild, 1);
+  assert.equal(arrow(window, composer, 'ArrowDown').defaultPrevented, false, 'below the table, going down');
+  assert.equal(arrow(window, composer, 'ArrowDown', { shiftKey: true }).defaultPrevented, false, 'extending a selection');
+  assert.equal(document.activeElement, composer);
+});
+
+test('on a long wrapped line, only its visual line next to the table enters', () => {
+  const { window, document, composer } = caretSetup(`<div>long line</div><article role="code">${TABLE_LINES}</article>`, 'long line', 1, {
+    caretRect: { top: 100, bottom: 120, height: 20 },
+    blockRect: { top: 160, bottom: 300, height: 140 },
+  });
+
+  assert.equal(arrow(window, composer, 'ArrowDown').defaultPrevented, false, 'another visual line lies between');
+  assert.equal(document.activeElement, composer);
+});
+
+test('in the source view the arrows move through the markdown as usual', () => {
+  const { window, composer, previews } = caretSetup(`<div>before</div><article role="code">${TABLE_LINES}</article>`, 'before', 2);
+  click(window, previews()[0].querySelector('.mdtable-toggle'));
+
+  assert.equal(arrow(window, composer, 'ArrowDown').defaultPrevented, false);
 });

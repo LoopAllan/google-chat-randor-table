@@ -20,6 +20,8 @@
   // Plain text that would read as formatting once it is markdown. "_" is left alone:
   // the renderer ignores intraword underscores, so snake_case stays readable.
   const MARKDOWN_SPECIAL = /[*`~]/g;
+  // Editors put one after an inline element so typing continues outside it; it is not content.
+  const ZERO_WIDTH_SPACE = /\u200B/g;
 
   function createHtmlTableReader({ parseHtml }) {
     function formatsOf(element) {
@@ -64,13 +66,22 @@
       }
     }
 
+    /** A link whose text is its own URL (as a bare URL renders: https://a.tw -> href https://a.tw/). */
+    function isOwnUrl(text, href) {
+      try {
+        return text === href || new URL(text).href === new URL(href).href;
+      } catch {
+        return false;
+      }
+    }
+
     function convertLink(element) {
       const text = convertChildren(element);
       const href = safeHref(element.getAttribute('href') ?? '');
       if (href === null) {
         return text;
       }
-      return text.trim() === href || text.trim() === '' ? href : `[${text.trim()}](${href})`;
+      return text.trim() === '' || isOwnUrl(text.trim(), href) ? text.trim() || href : `[${text.trim()}](${href})`;
     }
 
     function convertCode(element) {
@@ -105,7 +116,7 @@
 
     function convertNode(node) {
       if (node.nodeType === 3) {
-        return node.data.replace(/\s+/g, ' ').replace(MARKDOWN_SPECIAL, '\\$&');
+        return node.data.replace(ZERO_WIDTH_SPACE, '').replace(/\s+/g, ' ').replace(MARKDOWN_SPECIAL, '\\$&');
       }
       return node.nodeType === 1 ? convertElement(node) : '';
     }
@@ -114,6 +125,7 @@
       return [...element.childNodes].map(convertNode).join('');
     }
 
+    /** One cell element as markdown inline source, with line breaks as <br>. */
     function cellMarkdown(cell) {
       return applyFormats(cell, convertChildren(cell))
         .split(LINE)
@@ -156,7 +168,7 @@
       return table === null ? null : toGrid(table);
     }
 
-    return { readHtmlTable };
+    return { readHtmlTable, readCell: cellMarkdown };
   }
 
   const api = { createHtmlTableReader };

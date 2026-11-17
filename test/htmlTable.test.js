@@ -75,3 +75,10 @@ test('a link whose href is not a URL keeps only its text', () => {
 test('a cell merged down the first column pushes the next row\'s cells to the right', () => {
   assert.deepEqual(readHtmlTable(table('<tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr>')), [['a', 'b'], ['', 'c']]);
 });
+
+test('readCell turns one cell element back into markdown, e.g. a rendered preview cell being edited', () => {
+  const { readCell } = createHtmlTableReader({ parseHtml: (html) => new JSDOM(html).window.document });
+  const { document } = new JSDOM('<table><tr><td>a <strong>粗</strong>\u200B<br><a href="https://a.tw/">https://a.tw</a> <a href="https://b.tw/x">連結</a></td></tr></table>').window;
+
+  assert.equal(readCell(document.querySelector('td')), 'a **粗**<br>https://a.tw [連結](https://b.tw/x)');
+});

@@ -72,3 +72,19 @@ test('refuses a range that is not inside the code block', () => {
 
   assert.throws(() => writer.replaceLines(codeBlock, rangeOver(outside, 0, outside, 1), '| b |'), /not inside the code block/);
 });
+
+test('with moveCaret false, leaves focus and selection where they are (an edited preview cell)', () => {
+  const { document, codeBlock, inputs, writer, rangeOver } = setup('<article role="code"><div>| a |</div><div>| - |</div></article>');
+  const cell = document.createElement('div');
+  cell.setAttribute('contenteditable', 'true');
+  cell.textContent = 'typing';
+  document.body.appendChild(cell);
+  cell.focus();
+  const lines = codeBlock.querySelectorAll('div');
+
+  writer.replaceLines(codeBlock, rangeOver(lines[0].firstChild, 0, lines[1].firstChild, 5), '| b |\n| - |', { moveCaret: false });
+
+  assert.deepEqual(linesOf(codeBlock), ['DIV:| b |', 'DIV:| - |']);
+  assert.deepEqual(inputs, ['insertReplacementText']);
+  assert.equal(document.activeElement, cell);
+});

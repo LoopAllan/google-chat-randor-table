@@ -149,3 +149,13 @@ table.mdtable tbody tr:nth-child(even) td {
 .mdtable-composer-edit:hover {
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
+
+/* Cells of the composer preview are edited in place (cellEditing.js). */
+.mdtable-composer-item [contenteditable] {
+  outline: none;
+  cursor: text;
+}
+
+.mdtable-composer-item [contenteditable]:focus {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, currentColor 45%, transparent);
+}

@@ -53,3 +53,21 @@ test('setCaret focuses the composer and selects the range; a null range only foc
   chatDom.setCaret(composer, null);
   assert.equal(document.activeElement, composer);
 });
+
+test('editableAncestor never treats our own preview layer (editable table cells) as a Chat composer', () => {
+  const document = setup(`<div class="${chatDom.PREVIEW_LAYER_CLASS}"><table><tr><td id="cell" contenteditable="plaintext-only">x</td></tr></table></div>`);
+
+  assert.equal(chatDom.editableAncestor(document.getElementById('cell').firstChild), null);
+  assert.equal(chatDom.editableAncestor(document.getElementById('cell')), null);
+});
+
+test('sendMessage presses Enter in the composer, as a user sending the message would', () => {
+  const document = setup('<div id="c" role="textbox" contenteditable="true">hi</div>');
+  const composer = document.getElementById('c');
+  const keys = [];
+  composer.addEventListener('keydown', (event) => keys.push([event.key, event.keyCode, event.shiftKey, event.bubbles]));
+
+  chatDom.sendMessage(composer);
+
+  assert.deepEqual(keys, [['Enter', 13, false, true]]);
+});
